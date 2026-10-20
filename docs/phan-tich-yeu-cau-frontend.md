@@ -4,6 +4,8 @@ Ngày đối chiếu: 18/10/2026. Phạm vi theo yêu cầu: ứng dụng Flutte
 
 Đã xác nhận từ người dùng: **không làm luồng đăng ký; giảng viên cấp tài khoản để đăng nhập**. Nhóm có 5 thành viên; xem [phân công công việc](phan-cong-nhom.md).
 
+Cập nhật phạm vi ngày 20/10/2026: **bắt buộc đăng nhập trước khi xem bảng tin, không có chế độ khách**. Thầy sẽ ngắt mạng khi kiểm tra: cần giữ bài viết đã cache khi còn phiên đăng nhập, xử lý lỗi API, giữ bản nháp và tránh gửi trùng khi kết nối lại. Đây là yêu cầu xuyên suốt cho mọi tính năng; xem mục “Lưu ý bắt buộc xuyên suốt khi code và kiểm thử” trong tài liệu phân công.
+
 ## 1. Nguồn và mức độ xác nhận
 
 - PDF: [Social Network for Student-Generated Question Bank.pptx.pdf](<Social Network for Student-Generated Question Bank.pptx.pdf>), 208 trang.
