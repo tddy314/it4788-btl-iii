@@ -2,7 +2,7 @@
 
 ## Phạm vi đã triển khai
 
-Chỉ code trong `lib/app`, `lib/core` và entrypoint `lib/main.dart`. Các thư mục `lib/features/*` vẫn giữ `.gitkeep`, chưa triển khai đăng nhập, bảng tin, bài viết, câu hỏi, chat hay nghiệp vụ khác.
+Khung ban đầu nằm trong `lib/app`, `lib/core` và entrypoint `lib/main.dart`. Cập nhật 31/10/2026: đã thêm auth và menu cài đặt trong `features/auth`, `features/settings`, nối bằng API công khai của khung; xem [mục 1](muc-1-auth-settings.md). Những feature khác vẫn giữ `.gitkeep`.
 
 - `app`: bootstrap có loading/thử lại khi lỗi, dependency injection qua `AppScope`, theme/màu tập trung, locale tiếng Việt, router bảo vệ nội dung và shell 5 tab.
 - `core/config`: cấu hình base URL HTTPS, timeout và mã thành công của API.
@@ -13,15 +13,15 @@ Chỉ code trong `lib/app`, `lib/core` và entrypoint `lib/main.dart`. Các thư
 - `core/validation`: kiểm tra bắt buộc và đếm/giới hạn số từ.
 - Android: quyền Internet/network state, tên SQB, tắt backup để tránh phục hồi khóa/token không đồng bộ.
 
-Lúc chạy lần đầu chỉ hiện màn hình chờ tích hợp đăng nhập, không có form giả hoặc tài khoản hardcode. Khi có phiên, shell hiện 5 tab rỗng. Đây là các vị trí gắn feature, không phải homepage đã hoàn thiện.
+Entrypoint hiện hiển thị form đăng nhập thật qua `AuthApplication`. Khi có phiên, shell hiện các tab chờ tích hợp; tab Cá nhân tạm mở menu cài đặt tài khoản. Đây chưa phải homepage/hồ sơ hoàn thiện. Bản thân `SqbApp` vẫn có placeholder dự phòng khi không nhận builder.
 
 ## Gắn feature vào khung
 
 Lấy dependencies bằng `AppScope.of(context)`. Không tạo API client/token store riêng trong feature. `SqbApp` nhận `loginBuilder`, `tabBuilders` theo `AppTab`, và `protectedRoutes` để đăng ký màn hình; route con nhận ID qua `ModalRoute.of(context)?.settings.arguments`.
 
-Người làm auth phải gọi API đăng nhập bằng `authenticated: false`, chuyển response thành `SessionTokens` (user ID dùng chuỗi), và `await dependencies.session.save(tokens)`. Router tự chuyển sang shell; `session.clear()` bỏ navigation stack của phiên cũ. Việc có token lưu trên máy chỉ cho phép mở dữ liệu offline, không thay thế xác thực của server.
+`AuthRepository`/`AuthController` hiện gọi API đăng nhập bằng `authenticated: false`, chuyển response thành `SessionTokens` (user ID dùng chuỗi), và `await dependencies.session.save(tokens)`. Router tự chuyển sang shell; `session.clear()` bỏ navigation stack của phiên cũ. Việc có token lưu trên máy chỉ cho phép mở dữ liệu offline, không thay thế xác thực của server.
 
-Đăng ký `dependencies.api.refreshTokens = (current) async { ... }` ở phần auth. Callback gọi endpoint refresh với `authenticated: false`, trả về cặp token mới và giữ đúng user ID; không tự gọi `session.save()` trong callback vì API client đã làm việc này. Lỗi mạng phải được giữ nguyên, không tự logout. Khi refresh được server xác nhận không hợp lệ, auth xử lý yêu cầu đăng nhập lại. Client gom các refresh đồng thời và chỉ gửi lại GET/HEAD một lần; thao tác ghi/upload không được tự replay.
+`AuthApplication` đã đăng ký `dependencies.api.refreshTokens = _auth.refresh`. Callback gọi endpoint refresh với `authenticated: false`, trả về cặp token mới và giữ đúng user ID; không tự gọi `session.save()` trong callback vì API client đã làm việc này. Lỗi mạng giữ phiên. Khi refresh được server xác nhận không hợp lệ, auth xử lý yêu cầu đăng nhập lại. Client gom các refresh đồng thời và chỉ gửi lại GET/HEAD một lần; thao tác ghi/upload không được tự replay.
 
 Ví dụ gọi endpoint mới từ repository:
 
@@ -57,10 +57,10 @@ flutter analyze
 flutter test
 ```
 
-Mặc định API là `https://snsqb.duckdns.org/api/v1/`, mã thành công `0000`. Chỉ đổi mã sau khi kiểm chứng server thật; PDF cũ ghi `1000` nên có cấu hình riêng:
+Mặc định API là `https://snsqb.duckdns.org/api/v1/`, mã thành công `1000`. Đã kiểm chứng bằng API đăng nhập ANDROID thật ngày 31/10/2026; ví dụ `0000` trong Swagger không khớp server hiện tại. Có thể cấu hình riêng khi môi trường khác dùng mã khác:
 
 ```sh
-flutter run --dart-define=API_BASE_URL=https://snsqb.duckdns.org/api/v1/ --dart-define=API_SUCCESS_CODE=0000
+flutter run --dart-define=API_BASE_URL=https://snsqb.duckdns.org/api/v1/ --dart-define=API_SUCCESS_CODE=1000
 ```
 
 Không đưa token hoặc mật khẩu vào dart-define, source code, fixture hay Git. Hạ tầng này chưa có cấu hình Firebase/STOMP, đăng nhập thật, quản lý camera, hay chức năng tự gửi lại thao tác offline.
@@ -68,6 +68,6 @@ Không đưa token hoặc mật khẩu vào dart-define, source code, fixture ha
 ## Kiểm chứng
 
 - Đã chạy `flutter analyze --no-pub` và bộ kiểm thử nền tảng: transport lỗi, refresh đồng thời, session/logout, cache offline, router guard và widget trạng thái.
-- Chưa kiểm thử API có đăng nhập thật hoặc máy Android thật. Build APK debug đã thử nhưng dừng ở bước tải Android engine artifacts của Flutter SDK; chưa có APK được xác nhận build thành công.
+- Cập nhật 31/10/2026: đã cài lại NDK, SDK/CMake và tắt Kotlin incremental để khắc phục lỗi cache khác ổ đĩa. Build APK debug x86_64 và đăng nhập với server thật trên emulator API 37 thành công sau khi sửa success code thành 1000. Chưa kiểm chứng APK ARM64, máy thật hoặc refresh/logout/đổi mật khẩu thật. Xem hướng dẫn mục 1 để biết kết quả kiểm tra auth mới.
 
 Tham khảo hợp đồng thư viện: [Dio](https://pub.dev/packages/dio), [Connectivity Plus](https://pub.dev/packages/connectivity_plus), [Secure Storage](https://pub.dev/packages/flutter_secure_storage), [Shared Preferences](https://pub.dev/packages/shared_preferences), [Cached Network Image](https://pub.dev/packages/cached_network_image).

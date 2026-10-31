@@ -90,7 +90,7 @@ OpenAPI ghi rõ **không gọi API admin**. Không dùng `/auth/admin/*` để t
 ## 6. Hợp đồng dữ liệu cần chú ý
 
 - Login cần `email`, `password`, `device_id`, `platform`; dùng `platform: ANDROID`. `device_id` cần ổn định theo cài đặt, không sinh mới sau mỗi lần login. Response có token và vai trò.
-- Phản hồi chuẩn là `{code, message, data}`; OpenAPI minh họa mã thành công `"0000"`, PDF trang 68 ghi `"1000"`. Chưa xác nhận mã thật; không hardcode theo PDF hoặc coi HTTP 200 luôn là nghiệp vụ thành công.
+- Phản hồi chuẩn là `{code, message, data}`; OpenAPI minh họa mã thành công `"0000"`, PDF trang 68 ghi `"1000"`. Đã xác nhận ngày 31/10/2026: login thật với platform ANDROID trả `"1000"` cùng access/refresh token, nên AppConfig mặc định dùng `"1000"`. Không coi HTTP 200 luôn là nghiệp vụ thành công; kiểm chứng riêng nếu endpoint khác có hợp đồng khác.
 - JSON chủ yếu dùng `snake_case`; ID thường là số nguyên, cờ là boolean, điểm là số. PDF nhiều bảng ghi chúng là string, nên DTO phải theo từng schema hiện tại và kiểm chứng response thật.
 - Phân trang phổ biến dùng `after`, `limit`, `data.items`, `data.pagination.has_next`. Riêng tìm kiếm mô tả `after` như offset; phải đọc từng endpoint, không áp một quy tắc cursor cho toàn bộ API.
 - Nộp phiên dùng JSON gồm `title`, `subject_id`, `questions`; mỗi câu cần `content`, `llm_generated`, `options`. `options` là object với `key`, `text`, `is_correct` và media tùy chọn, không phải danh sách chuỗi.
