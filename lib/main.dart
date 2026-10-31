@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app/app.dart';
 import 'app/app_dependencies.dart';
 import 'core/widgets/app_states.dart';
+import 'features/auth/auth_application.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
     future: _dependencies,
     builder: (context, snapshot) {
       if (snapshot.hasData) {
-        return SqbApp(dependencies: snapshot.requireData);
+        return AuthApplication(dependencies: snapshot.requireData);
       }
       return SqbApp.starting(
         child: snapshot.hasError

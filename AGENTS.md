@@ -78,11 +78,11 @@ Danh sách dưới đây do nhóm chủ động dự kiến theo yêu cầu ngư
 
 Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùng fake/mock hay môi trường test có kiểm soát. Không tự phá dữ liệu, spam request, thay cấu hình thiết bị/server hoặc dùng API admin để tạo tình huống trên hệ thống dùng chung. Chỉ ghi “đã kiểm thử” khi thực sự chạy; nếu phụ thuộc backend chưa hỗ trợ thì ghi rõ giới hạn, không giả lập thành hành vi đã tích hợp.
 
-## 3. Hiện trạng khi tạo context — 20/10/2026
+## 3. Hiện trạng — cập nhật 31/10/2026
 
-Đã có khung app và core dùng chung; `lib/features/*` mới có `.gitkeep`. Màn đăng nhập là placeholder, shell có 5 tab chờ nội dung; **chưa có login thật, homepage nghiệp vụ, feed cache tích hợp hay chat**. Đây là snapshot, không phải lệnh giữ các feature trống mãi: hãy triển khai feature khi được giao và cập nhật hiện trạng sau đó.
+Đã có khung app/core và triển khai mục 1 trong `features/auth`, `features/settings`: màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai; không thay implementation của app/core. Tab Cá nhân tạm hiển thị menu cài đặt tài khoản, chưa phải hồ sơ. Những feature khác vẫn giữ `.gitkeep`; **chưa có homepage nghiệp vụ, feed cache tích hợp hay chat**.
 
-Trước đó `flutter analyze --no-pub` sạch lỗi và 18 kiểm thử nền tảng đạt. Chưa xác nhận API có đăng nhập thật hoặc thiết bị thật. Build APK đã thử nhưng dừng khi Flutter tải Android engine artifacts; không được ghi nhận là APK đã build thành công. Chạy lại kiểm tra phù hợp sau thay đổi của mình.
+Đã đối chiếu Swagger ngày 31/10/2026, chạy `flutter analyze --no-pub` sạch lỗi và 31 kiểm thử đạt. Đã cài lại NDK, bổ sung SDK/CMake và build APK debug x86_64 thành công; đã đăng nhập với server thật bằng tài khoản người dùng cung cấp trên emulator Android API 37, kiểm tra vào khung 5 tab. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:. Chưa xác nhận ARM64, thiết bị thật hoặc refresh/logout/đổi mật khẩu trên server thật. Không suy ra toàn bộ tính năng đã tích hợp từ test giả hoặc một lần login thật. Xem [hướng dẫn mục 1](docs/muc-1-auth-settings.md) để gắn các feature còn lại.
 
 ## 4. Thành phần có sẵn — tái sử dụng trước khi tạo mới
 
@@ -107,6 +107,8 @@ Trước đó `flutter analyze --no-pub` sạch lỗi và 18 kiểm thử nền 
 | `lib/core/widgets/` | `AppButton`, `AppTextField`, loading/empty/error, `ConnectionBanner`, `AppNetworkImage`, `AppAvatar`, `CachedResourceView<T>` |
 | `lib/core/validation/validators.dart` | `Validators`: bắt buộc, đếm từ, giới hạn số từ |
 | `test/support/fakes.dart` | `MemoryStore`, `FakeConnection`: test không phụ thuộc plugin thật |
+| `lib/features/auth/` | `AuthApplication`, `AuthController`, `AuthRepository`, `DeviceIdentity`, `LoginScreen`, `AuthValidation`: xác thực qua core và UUID cài đặt bền vững |
+| `lib/features/settings/` | `SettingsScreen`, `SettingsRoutes`, `ChangePasswordScreen`: menu tài khoản, đổi mật khẩu, đăng xuất và đóng app |
 
 Dependencies đã có: Flutter localizations, Dio, flutter_secure_storage, shared_preferences, connectivity_plus, cached_network_image. Đọc `pubspec.yaml`/lock để biết phiên bản; không tự thêm một HTTP client, storage hoặc giải pháp quản lý trạng thái thứ hai cho cùng mục đích.
 
@@ -115,7 +117,7 @@ Dependencies đã có: Flutter localizations, Dio, flutter_secure_storage, share
 - UI lấy service qua `AppScope.of(context)`, truyền dependency vào controller/repository. Không gọi HTTP trực tiếp từ widget hoặc tạo token store riêng.
 - `SqbApp` nhận `loginBuilder`, `tabBuilders: Map<AppTab, WidgetBuilder>` và `protectedRoutes: Map<String, WidgetBuilder>`. Gắn màn vào đây; giữ một `MaterialApp` và cơ chế router chung.
 - Auth gọi login với `authenticated: false`, map user ID thành chuỗi trong `SessionTokens`, rồi `await session.save(tokens)`. `session.clear()` bỏ stack điều hướng của user cũ.
-- `ApiClient.refreshTokens` hiện là callback chờ auth tích hợp. Callback dùng API refresh với `authenticated: false`, trả cặp token mới cùng user ID; **không tự save token trong callback**. Client gom refresh đồng thời, save token và chỉ retry GET/HEAD một lần. Không tuyên bố refresh backend đã tích hợp chỉ vì có callback.
+- `AuthApplication` đã gắn `ApiClient.refreshTokens` vào `AuthController.refresh`. Callback dùng API refresh với `authenticated: false`, trả cặp token mới cùng user ID; **không tự save token trong callback**. Client gom refresh đồng thời, save token và chỉ retry GET/HEAD một lần. Server từ chối refresh bằng lỗi xác thực/quyền thì auth xóa đúng phiên cũ; lỗi mạng giữ phiên. Chưa kiểm chứng refresh bằng tài khoản/server thật.
 - Client nhận đường dẫn tương đối sau base URL, ví dụ `posts`, không gắn thêm `/api/v1` và không truyền URL domain khác. `decode` nhận payload `data`, không phải toàn response.
 - Request của client cần envelope JSON; tải file binary hoặc upload presigned cần đường xử lý riêng phù hợp, không gửi Bearer token sang domain khác.
 - `MediaUploadService` chỉ upload file; feature vẫn phải chọn/chụp media, kiểm tra loại/thời lượng/số lượng và tạo DTO nghiệp vụ từ kết quả upload.
@@ -146,8 +148,11 @@ Dependencies đã có: Flutter localizations, Dio, flutter_secure_storage, share
 
 ## 6. Hợp đồng nghiệp vụ và API cần nhớ
 
+- **Bắt buộc đọc kỹ Swagger của từng endpoint trước khi code hoặc sửa tích hợp API.** Kiểm tra method/path, header/token, quyền, nền tảng, content type, tham số bắt buộc/tùy chọn, kiểu dữ liệu, enum, nullability, phân trang và response thành công/thất bại; không chỉ sao chép JSON ví dụ hoặc suy đoán theo tên API.
+- Phân biệt schema/mô tả với ví dụ minh họa. Đối chiếu response thật trong môi trường và phạm vi được phép thử, nhất là HTTP status, `code`, payload `data`, token/cookie và khác biệt WEB/ANDROID. Nếu chưa thể kiểm chứng thì ghi rõ giả định, không báo là đã tích hợp thành công.
+- Khi Swagger và server không khớp, ghi lại khác biệt đã quan sát (không lưu mật khẩu/token), cập nhật mapping/cấu hình và test hồi quy theo hợp đồng đã xác nhận; không bỏ kiểm tra lỗi hoặc mặc định mọi HTTP 200 đều thành công. Test giả phải phản ánh response thực tế đã biết, không chỉ xác nhận giả định do người code tự đặt ra.
 - [Swagger](https://snsqb.duckdns.org/api/v1/swagger-ui/index.html), [OpenAPI JSON](https://snsqb.duckdns.org/api/v1/docs/openapi.json). Đọc lại phần endpoint/schema liên quan khi tích hợp; tài liệu có thể thay đổi. **Không gọi API admin từ app**.
-- Base URL mặc định: `https://snsqb.duckdns.org/api/v1/`. Mã thành công đang cấu hình `0000`; PDF cũ ghi `1000`, nên cần kiểm chứng response thật trước khi đổi `API_SUCCESS_CODE`. HTTP 200 chưa đủ để kết luận nghiệp vụ thành công.
+- Base URL mặc định: `https://snsqb.duckdns.org/api/v1/`. Mã thành công mặc định đã sửa thành **`1000`** theo response login thật ngày 31/10/2026; Swagger minh họa `0000` không khớp server hiện tại. HTTP 200 chưa đủ để kết luận nghiệp vụ thành công. Đã xác nhận login payload ANDROID trả cả access/refresh token; payload WEB có thể trả refresh token null, không áp kết luận đó cho Android. Không lưu tài khoản thử hoặc token vào repo.
 - API bảng tin và chi tiết bài đã được thử không token và trả HTTP 401/code 9998. Public visibility không đồng nghĩa với truy cập ẩn danh.
 - PDF yêu cầu bài viết/bình luận tối đa **500 từ**, bài public, một loại Like, tối đa **4 ảnh hoặc 1 video**, không trộn ảnh/video. Ảnh tối đa 4 MB; video tối đa 10 MB và 1–10 giây. Không tự mở thêm reaction/privacy vì Swagger hỗ trợ nhiều hơn.
 - Không tự thêm share, tag, nhóm xã hội, chat nhóm, sửa bình luận hay tự xóa tài khoản chỉ vì giống Facebook hoặc vì có API; xem phạm vi đã chốt cho từng chức năng.

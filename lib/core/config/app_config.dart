@@ -6,7 +6,7 @@ class AppConfig {
     ),
     this.successCode = const String.fromEnvironment(
       'API_SUCCESS_CODE',
-      defaultValue: '0000',
+      defaultValue: '1000',
     ),
     this.connectTimeout = const Duration(seconds: 10),
     this.receiveTimeout = const Duration(seconds: 20),

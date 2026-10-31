@@ -30,7 +30,7 @@ class FakeAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-ResponseBody reply(int status, Object? data, {String code = '0000'}) =>
+ResponseBody reply(int status, Object? data, {String code = '1000'}) =>
     ResponseBody.fromString(
       jsonEncode({'code': code, 'message': '', 'data': data}),
       status,
@@ -73,6 +73,24 @@ void main() {
     clients.add(api);
     return api;
   }
+
+  test(
+    'Live backend success code 1000 is accepted; unrelated code is rejected',
+    () async {
+      final adapter = FakeAdapter(
+        (_) async => reply(200, {'ok': true}, code: '1000'),
+      );
+      final api = clientFor(adapter);
+      expect(await api.get('items', decode: (v) => v), {'ok': true});
+      final outdated = clientFor(
+        FakeAdapter((_) async => reply(200, null, code: '0000')),
+      );
+      await expectLater(
+        outdated.get('items', decode: (v) => v),
+        throwsA(isA<AppFailure>().having((e) => e.code, 'code', '0000')),
+      );
+    },
+  );
 
   test(
     'Uses API prefix and Bearer token without treating data as raw response',
