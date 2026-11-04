@@ -12,6 +12,7 @@
 - Khi còn phiên đăng nhập, mất mạng không đồng nghĩa với đăng xuất; có thể xem nội dung đã lưu trên máy.
 - Luồng chính: đăng nhập → chọn môn đang học → soạn/nộp bộ câu hỏi → theo dõi đề xuất; bổ sung các tính năng xã hội theo công việc được giao.
 - Chỉ triển khai tính năng được giao. Không tự mở rộng sang minigame, AI, chat nhóm, duyệt câu hỏi hay sinh đề cho giảng viên.
+- Phạm vi người dùng hiện tại là **hồ sơ và quan hệ bạn bè**. Chỉ giữ tìm người trong tab Bạn bè để mở hồ sơ/gửi lời mời; không triển khai module tìm kiếm toàn cục, tìm bài viết, lịch sử hay từ khóa thịnh hành. Phân công tham khảo ở mục 7 không mở rộng nhiệm vụ này.
 
 ## 2. Mất mạng là tiêu chí nghiệm thu bắt buộc
 
@@ -78,9 +79,9 @@ Danh sách dưới đây do nhóm chủ động dự kiến theo yêu cầu ngư
 
 Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùng fake/mock hay môi trường test có kiểm soát. Không tự phá dữ liệu, spam request, thay cấu hình thiết bị/server hoặc dùng API admin để tạo tình huống trên hệ thống dùng chung. Chỉ ghi “đã kiểm thử” khi thực sự chạy; nếu phụ thuộc backend chưa hỗ trợ thì ghi rõ giới hạn, không giả lập thành hành vi đã tích hợp.
 
-## 3. Hiện trạng — cập nhật 31/10/2026
+## 3. Hiện trạng — cập nhật 04/11/2026
 
-Đã có khung app/core và triển khai mục 1 trong `features/auth`, `features/settings`: màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai; không thay implementation của app/core. Tab Cá nhân tạm hiển thị menu cài đặt tài khoản, chưa phải hồ sơ. Những feature khác vẫn giữ `.gitkeep`; **chưa có homepage nghiệp vụ, feed cache tích hợp hay chat**.
+Đã có khung app/core và triển khai mục 1 trong `features/auth`, `features/settings`: màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai; không thay implementation của app/core. Cập nhật 04/11: đã thêm `features/profile`, `features/relationships`, nối tab Cá nhân/ Bạn bè qua `AuthApplication`; có hồ sơ cá nhân/người khác, sửa hồ sơ/bản nháp/upload ảnh, danh sách bạn/lời mời/follow/chặn và tóm tắt bài viết/phiên đề xuất chỉ đọc. Menu cài đặt mở từ hồ sơ và có danh sách chặn. Tab Bạn bè có tìm người để mở hồ sơ/gửi lời mời; code nằm trong `features/relationships/friend_finder_*`, chỉ GET search với type USER. Đã bỏ phần tìm kiếm toàn cục, tìm bài viết, lịch sử/thịnh hành và preview bài viết từ tìm kiếm. Đã đọc OpenAPI; chưa kiểm chứng API của các module mới bằng tài khoản thật hoặc thiết bị thật. Chưa có homepage nghiệp vụ, feed cache tích hợp hay chat. Xem [bàn giao hồ sơ và quan hệ](docs/module-ho-so-quan-he.md).
 
 Đã đối chiếu Swagger ngày 31/10/2026, chạy `flutter analyze --no-pub` sạch lỗi và 31 kiểm thử đạt. Đã cài lại NDK, bổ sung SDK/CMake và build APK debug x86_64 thành công; đã đăng nhập với server thật bằng tài khoản người dùng cung cấp trên emulator Android API 37, kiểm tra vào khung 5 tab. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:. Chưa xác nhận ARM64, thiết bị thật hoặc refresh/logout/đổi mật khẩu trên server thật. Không suy ra toàn bộ tính năng đã tích hợp từ test giả hoặc một lần login thật. Xem [hướng dẫn mục 1](docs/muc-1-auth-settings.md) để gắn các feature còn lại.
 
@@ -111,6 +112,10 @@ Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùn
 | `lib/features/settings/` | `SettingsScreen`, `SettingsRoutes`, `ChangePasswordScreen`: menu tài khoản, đổi mật khẩu, đăng xuất và đóng app |
 
 Dependencies đã có: Flutter localizations, Dio, flutter_secure_storage, shared_preferences, connectivity_plus, cached_network_image. Đọc `pubspec.yaml`/lock để biết phiên bản; không tự thêm một HTTP client, storage hoặc giải pháp quản lý trạng thái thứ hai cho cùng mục đích.
+
+Module hồ sơ bổ sung `image_picker` (1.2.4 theo lockfile hiện tại). `SocialChanges`/`SocialLease` trong `features/relationships` là điểm nối vô hiệu dữ liệu sau thay đổi quan hệ/phiên; route hồ sơ người khác là `ProfileRoutes.user` nhận ID qua arguments. Không tự coi feed/chat đã nghe sự kiện chặn. Hồ sơ của tôi chỉ lưu bản tóm tắt công khai trên đĩa; đồ thị quan hệ giữ trong RAM, bản nháp riêng dùng secure storage. Sau khi thu gọn phạm vi và giữ tìm người trong Bạn bè, analyzer sạch và toàn bộ 60 test đạt; build APK của module mới chưa xác nhận vì Gradle lỗi loopback khi khởi động, khác với kết quả build auth ngày 31/10 bên trên.
+
+Tìm người thuộc module Bạn bè, route `RelationshipRoutes.findFriends` (`/friends/find`), chỉ `GET search?type=USER`; debounce 350 ms và offset từ server. Kết quả chỉ giữ trong RAM, bỏ response cũ và hủy GET khi đổi phiên/dispose. Không gọi API lịch sử/thịnh hành hoặc POST ghi lượt tìm kiếm; không cache email/mã sinh viên từ search DTO. Kết quả mở `ProfileRoutes.user` để dùng các thao tác quan hệ đã có.
 
 ## 5. Quy tắc tích hợp feature
 
