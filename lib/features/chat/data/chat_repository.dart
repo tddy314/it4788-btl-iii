@@ -13,10 +13,16 @@ class ChatRepository {
     required JsonCache cache,
     required MediaUploadService mediaUploadService,
     SqbStompClient? stompClient,
+    String? wsUrl,
   }) : _api = api,
        _cache = cache,
        _mediaUploadService = mediaUploadService,
-       _stomp = stompClient;
+       _stomp =
+           stompClient ??
+           SqbStompClient(
+             url: wsUrl ?? 'wss://snsqb.duckdns.org/api/v1/ws',
+             tokenProvider: () async => api.session.tokens?.accessToken,
+           );
 
   final ApiClient _api;
   final JsonCache _cache;

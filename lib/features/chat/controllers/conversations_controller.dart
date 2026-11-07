@@ -45,7 +45,11 @@ class ConversationsController extends ChangeNotifier {
   }
 
   void _setupStompListener() {
-    _repository.stomp?.subscribe('/user/queue/messages', (payload) {
+    final stomp = _repository.stomp;
+    if (stomp == null) return;
+    stomp.connect();
+
+    stomp.subscribe('/user/queue/messages', (payload) {
       final convId = payload['conversation_id']?.toString();
       final content = payload['content'] as String?;
       final msgId = payload['message_id']?.toString();

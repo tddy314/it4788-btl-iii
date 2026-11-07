@@ -87,6 +87,7 @@ class ChatDetailController extends ChangeNotifier {
   void _setupRealtimeListeners() {
     final stomp = _repository.stomp;
     if (stomp == null) return;
+    stomp.connect();
 
     // Lắng nghe tin nhắn mới gửi đến
     stomp.subscribe('/user/queue/messages', (payload) {
@@ -230,7 +231,7 @@ class ChatDetailController extends ChangeNotifier {
       }
     });
 
-    // 2. Phát sự kiện typing qua socket (debounce 1 giây)
+    // 2. Phát sự kiện typing qua socket (debounce 300ms)
     _typingDebounceTimer?.cancel();
     _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
       _repository.sendTypingStatus(
@@ -280,11 +281,16 @@ class ChatDetailController extends ChangeNotifier {
 
     // 4. Gửi qua STOMP WebSocket
     try {
-      _repository.sendStompMessage(
-        conversationId: _conversationId,
-        content: processedContent,
-        clientMsgId: clientMsgId,
-      );
+      if (_repository.stomp != null && _repository.stomp!.isConnected) {
+        _repository.sendStompMessage(
+          conversationId: _conversationId,
+          content: processedContent,
+          clientMsgId: clientMsgId,
+        );
+      } else {
+        // Nếu socket chưa nối hoặc offline, đánh dấu failed để có nút Thử lại
+        _markMessageStatus(clientMsgId, MessageStatus.failed);
+      }
 
       // Lưu cache cục bộ
       _repository.saveCachedMessages(
@@ -351,11 +357,16 @@ class ChatDetailController extends ChangeNotifier {
       sendImageMessage(failedMessage.mediaUrls.first);
     } else {
       try {
-        _repository.sendStompMessage(
-          conversationId: _conversationId,
-          content: failedMessage.content,
-          clientMsgId: failedMessage.clientMsgId, // Giữ nguyên ID chống trùng
-        );
+        if (_repository.stomp != null && _repository.stomp!.isConnected) {
+          _repository.sendStompMessage(
+            conversationId: _conversationId,
+            content: failedMessage.content,
+            clientMsgId: failedMessage.clientMsgId, // Giữ nguyên ID chống trùng
+          );
+          _markMessageStatus(failedMessage.clientMsgId, MessageStatus.sent);
+        } else {
+          _markMessageStatus(failedMessage.clientMsgId, MessageStatus.failed);
+        }
       } catch (_) {
         _markMessageStatus(failedMessage.clientMsgId, MessageStatus.failed);
       }
