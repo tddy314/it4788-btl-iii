@@ -16,6 +16,10 @@ void main() {
       expect(ChatEmoteConverter.convertEmotes('Thích nè <3'), 'Thích nè ❤️');
       expect(ChatEmoteConverter.convertEmotes('Ngầu chưa B)'), 'Ngầu chưa 😎');
       expect(ChatEmoteConverter.convertEmotes('Được đấy (y)'), 'Được đấy 👍');
+      expect(ChatEmoteConverter.convertEmotes('Cánh cụt <(") nè'), 'Cánh cụt 🐧 nè');
+      expect(ChatEmoteConverter.convertEmotes('Cá mập (^^^) bơi'), 'Cá mập 🦈 bơi');
+      expect(ChatEmoteConverter.convertEmotes('Khóc quá :((('), 'Khóc quá 😭');
+      expect(ChatEmoteConverter.convertEmotes('Hôn nè :*'), 'Hôn nè 😘');
     });
 
     test('Leaves normal text without emotes intact', () {
