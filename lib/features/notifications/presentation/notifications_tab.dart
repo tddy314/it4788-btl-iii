@@ -7,6 +7,8 @@ import '../data/notification_repository.dart';
 import 'widgets/notification_deep_link_handler.dart';
 import 'widgets/notification_tile.dart';
 
+enum NotificationFilter { all, unread, academic }
+
 class NotificationsTab extends StatefulWidget {
   const NotificationsTab({super.key});
 
@@ -17,6 +19,7 @@ class NotificationsTab extends StatefulWidget {
 class _NotificationsTabState extends State<NotificationsTab> {
   NotificationController? _controller;
   final _scrollController = ScrollController();
+  NotificationFilter _selectedFilter = NotificationFilter.all;
   bool _initialized = false;
 
   @override
@@ -94,7 +97,48 @@ class _NotificationsTabState extends State<NotificationsTab> {
               ),
             ],
           ),
-          body: _buildBody(context, controller),
+          body: Column(
+            children: [
+              // Thanh lọc danh mục thông báo
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('Tất cả'),
+                      selected: _selectedFilter == NotificationFilter.all,
+                      onSelected: (_) =>
+                          setState(() => _selectedFilter = NotificationFilter.all),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text(
+                        unread > 0 ? 'Chưa đọc ($unread)' : 'Chưa đọc',
+                      ),
+                      selected: _selectedFilter == NotificationFilter.unread,
+                      onSelected: (_) => setState(
+                        () => _selectedFilter = NotificationFilter.unread,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      avatar: const Icon(Icons.school_outlined, size: 16),
+                      label: const Text('Ngân hàng đề'),
+                      selected: _selectedFilter == NotificationFilter.academic,
+                      onSelected: (_) => setState(
+                        () => _selectedFilter = NotificationFilter.academic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+
+              // Danh sách thông báo
+              Expanded(child: _buildBody(context, controller)),
+            ],
+          ),
         );
       },
     );
@@ -112,12 +156,28 @@ class _NotificationsTabState extends State<NotificationsTab> {
       );
     }
 
-    if (controller.items.isEmpty) {
-      return const AppEmptyState(
+    var displayItems = controller.items;
+    if (_selectedFilter == NotificationFilter.unread) {
+      displayItems = displayItems.where((e) => !e.isRead).toList();
+    } else if (_selectedFilter == NotificationFilter.academic) {
+      displayItems = displayItems.where((e) {
+        final t = e.type.toUpperCase();
+        return t.contains('SESSION') || t.contains('QUESTION');
+      }).toList();
+    }
+
+    if (displayItems.isEmpty) {
+      final emptyMsg = switch (_selectedFilter) {
+        NotificationFilter.unread => 'Không có thông báo chưa đọc nào.',
+        NotificationFilter.academic =>
+          'Chưa có thông báo liên quan đến ngân hàng câu hỏi.',
+        NotificationFilter.all =>
+          'Bạn sẽ nhận được thông báo khi có bạn bè tương tác hoặc kết quả duyệt câu hỏi.',
+      };
+      return AppEmptyState(
         icon: Icons.notifications_none_outlined,
         title: 'Chưa có thông báo',
-        message:
-            'Bạn sẽ nhận được thông báo khi có bạn bè tương tác hoặc kết quả duyệt câu hỏi.',
+        message: emptyMsg,
       );
     }
 
@@ -126,10 +186,10 @@ class _NotificationsTabState extends State<NotificationsTab> {
       child: ListView.separated(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: controller.items.length + (controller.hasNext ? 1 : 0),
+        itemCount: displayItems.length + (controller.hasNext ? 1 : 0),
         separatorBuilder: (_, __) => const Divider(height: 1, thickness: 0.5),
         itemBuilder: (context, index) {
-          if (index == controller.items.length) {
+          if (index == displayItems.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
@@ -142,7 +202,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
             );
           }
 
-          final item = controller.items[index];
+          final item = displayItems[index];
           return NotificationTile(
             notification: item,
             onTap: () {

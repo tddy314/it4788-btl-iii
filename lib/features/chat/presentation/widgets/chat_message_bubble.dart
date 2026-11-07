@@ -23,6 +23,44 @@ class ChatMessageBubble extends StatelessWidget {
     return '$hour:$minute';
   }
 
+  void _showFullScreenImage(BuildContext context, String url, bool isLocal) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: isLocal
+                    ? Image.file(
+                        File(url),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.broken_image,
+                          size: 64,
+                          color: Colors.white70,
+                        ),
+                      )
+                    : AppNetworkImage(url: url, fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine(currentUserId);
@@ -117,24 +155,49 @@ class ChatMessageBubble extends StatelessWidget {
         !mediaUrl.startsWith('http://') &&
         !mediaUrl.startsWith('https://');
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 220, maxHeight: 220),
-        child:
-            isLocal
-                ? Image.file(
-                  File(mediaUrl),
-                  fit: BoxFit.cover,
-                  errorBuilder:
-                      (_, __, ___) => const Icon(Icons.broken_image, size: 48),
-                )
-                : AppNetworkImage(
-                  url: mediaUrl,
-                  fit: BoxFit.cover,
-                  width: 220,
-                  height: 180,
+    return GestureDetector(
+      onTap: () {
+        if (mediaUrl.isNotEmpty) {
+          _showFullScreenImage(context, mediaUrl, isLocal);
+        }
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220, maxHeight: 220),
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              isLocal
+                  ? Image.file(
+                    File(mediaUrl),
+                    fit: BoxFit.cover,
+                    errorBuilder:
+                        (_, __, ___) =>
+                            const Icon(Icons.broken_image, size: 48),
+                  )
+                  : AppNetworkImage(
+                    url: mediaUrl,
+                    fit: BoxFit.cover,
+                    width: 220,
+                    height: 180,
+                  ),
+              Container(
+                margin: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(
+                  Icons.fullscreen,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -14,11 +14,13 @@ class ChatDetailScreen extends StatefulWidget {
     this.conversationId,
     this.partnerName,
     this.partnerAvatarUrl,
+    this.isBlocked = false,
   });
 
   final String? conversationId;
   final String? partnerName;
   final String? partnerAvatarUrl;
+  final bool isBlocked;
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -32,6 +34,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   late String _convId;
   late String _pName;
   String? _pAvatar;
+  bool _isBlocked = false;
 
   @override
   void didChangeDependencies() {
@@ -44,10 +47,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         _convId = widget.conversationId ?? args['conversationId']?.toString() ?? '';
         _pName = widget.partnerName ?? args['partnerName'] as String? ?? 'Bạn học';
         _pAvatar = widget.partnerAvatarUrl ?? args['partnerAvatarUrl'] as String?;
+        _isBlocked = widget.isBlocked || (args['isBlocked'] == true);
       } else {
         _convId = widget.conversationId ?? '';
         _pName = widget.partnerName ?? 'Bạn học';
         _pAvatar = widget.partnerAvatarUrl;
+        _isBlocked = widget.isBlocked;
       }
 
       final deps = AppScope.of(context);
@@ -88,7 +93,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _pickAndSendImage(BuildContext context) {
-    // Dialog cho phép chọn chụp ảnh hoặc nhập đường dẫn ảnh kiểm thử
     final textController = TextEditingController();
     showDialog<void>(
       context: context,
@@ -219,13 +223,36 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                 ),
 
-              // Thanh nhập tin nhắn
-              ChatInputBar(
-                initialText: controller.draftText,
-                onTextChanged: controller.onTextChanged,
-                onSendText: controller.sendTextMessage,
-                onPickImage: () => _pickAndSendImage(context),
-              ),
+              // Nếu đang bị chặn thì hiện banner cảnh báo, ngược lại hiện thanh chat input
+              if (_isBlocked)
+                Container(
+                  width: double.infinity,
+                  color: Colors.amber.shade100,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.block, color: Colors.red, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Bạn không thể gửi tin nhắn cho người này do đã bị chặn.',
+                          style: TextStyle(
+                            color: Colors.red.shade900,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ChatInputBar(
+                  initialText: controller.draftText,
+                  onTextChanged: controller.onTextChanged,
+                  onSendText: controller.sendTextMessage,
+                  onPickImage: () => _pickAndSendImage(context),
+                ),
             ],
           ),
         );
@@ -258,7 +285,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     return ListView.builder(
       controller: _scrollController,
-      reverse: true, // Cuộn ngược theo chuẩn giao diện chat
+      reverse: true,
       itemCount: controller.messages.length + (controller.hasNext ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == controller.messages.length) {
