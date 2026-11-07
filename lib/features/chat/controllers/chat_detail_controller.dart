@@ -1,0 +1,380 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+
+import '../../../core/errors/app_failure.dart';
+import '../../../core/storage/draft_store.dart';
+import '../data/chat_repository.dart';
+import '../models/chat_message.dart';
+import '../utils/chat_emote_converter.dart';
+
+class ChatDetailController extends ChangeNotifier {
+  ChatDetailController({
+    required ChatRepository repository,
+    required DraftStore draftStore,
+    required String userId,
+    required String currentUserName,
+    required String conversationId,
+    required String partnerName,
+    String? partnerAvatarUrl,
+  }) : _repository = repository,
+       _draftStore = draftStore,
+       _userId = userId,
+       _currentUserName = currentUserName,
+       _conversationId = conversationId,
+       _partnerName = partnerName,
+       _partnerAvatarUrl = partnerAvatarUrl;
+
+  final ChatRepository _repository;
+  final DraftStore _draftStore;
+  final String _userId;
+  final String _currentUserName;
+  final String _conversationId;
+  final String _partnerName;
+  final String? _partnerAvatarUrl;
+
+  List<ChatMessage> _messages = [];
+  bool _isLoading = false;
+  bool _isLoadingEarlier = false;
+  bool _isPartnerTyping = false;
+  String? _errorMessage;
+  String? _after;
+  bool _hasNext = false;
+  String _draftText = '';
+
+  Timer? _typingIndicatorTimer;
+  Timer? _typingDebounceTimer;
+  Timer? _draftDebounceTimer;
+
+  List<ChatMessage> get messages => List.unmodifiable(_messages);
+  bool get isLoading => _isLoading;
+  bool get isLoadingEarlier => _isLoadingEarlier;
+  bool get isPartnerTyping => _isPartnerTyping;
+  String? get errorMessage => _errorMessage;
+  bool get hasNext => _hasNext;
+  String get draftText => _draftText;
+  String get partnerName => _partnerName;
+  String? get partnerAvatarUrl => _partnerAvatarUrl;
+  String get conversationId => _conversationId;
+
+  String get _draftKey => 'chat_draft_$_conversationId';
+
+  Future<void> initialize() async {
+    // 1. Phục hồi bản nháp (Draft) từ secure storage
+    final draftData = await _draftStore.read(userId: _userId, name: _draftKey);
+    if (draftData != null && draftData['text'] is String) {
+      _draftText = draftData['text'] as String;
+    }
+
+    // 2. Cache-first: Đọc tin nhắn offline đã lưu trên máy
+    final cached = await _repository.loadCachedMessages(
+      userId: _userId,
+      conversationId: _conversationId,
+    );
+    if (cached != null && cached.isNotEmpty) {
+      _messages = cached;
+      notifyListeners();
+    }
+
+    // 3. Lấy tin nhắn mới nhất từ server
+    await fetchFirstPage(showLoading: _messages.isEmpty);
+
+    // 4. Lắng nghe Realtime qua WebSocket STOMP
+    _setupRealtimeListeners();
+  }
+
+  void _setupRealtimeListeners() {
+    final stomp = _repository.stomp;
+    if (stomp == null) return;
+
+    // Lắng nghe tin nhắn mới gửi đến
+    stomp.subscribe('/user/queue/messages', (payload) {
+      final convId = payload['conversation_id']?.toString();
+      if (convId != _conversationId) return;
+
+      final incoming = ChatMessage.fromJson(payload);
+      _handleIncomingMessage(incoming);
+    });
+
+    // Lắng nghe sự kiện typing từ đối phương
+    stomp.subscribe('/topic/conv.$_conversationId.typing', (payload) {
+      final senderUserId = payload['user_id']?.toString();
+      if (senderUserId == _userId) return; // Bỏ qua sự kiện của chính mình
+
+      final isTyping = payload['is_typing'] == true ||
+          payload['is_typing']?.toString().toLowerCase() == 'true';
+
+      _isPartnerTyping = isTyping;
+      notifyListeners();
+
+      _typingIndicatorTimer?.cancel();
+      if (isTyping) {
+        // Tự động ẩn trạng thái typing sau 3.5 giây nếu không nhận được event tiếp theo
+        _typingIndicatorTimer = Timer(const Duration(milliseconds: 3500), () {
+          _isPartnerTyping = false;
+          notifyListeners();
+        });
+      }
+    });
+  }
+
+  void _handleIncomingMessage(ChatMessage message) {
+    // Kiểm tra tin nhắn đã tồn tại chưa (tránh trùng theo messageId hoặc clientMsgId)
+    final existingIndex = _messages.indexWhere(
+      (m) =>
+          (m.messageId.isNotEmpty && m.messageId == message.messageId) ||
+          (m.clientMsgId.isNotEmpty && m.clientMsgId == message.clientMsgId),
+    );
+
+    if (existingIndex != -1) {
+      _messages[existingIndex] = message.copyWith(status: MessageStatus.sent);
+    } else {
+      _messages.insert(0, message);
+    }
+    notifyListeners();
+
+    // Lưu cache 50 tin nhắn mới nhất
+    _repository.saveCachedMessages(
+      userId: _userId,
+      conversationId: _conversationId,
+      messages: _messages,
+    );
+
+    // Gửi xác nhận đã đọc nếu tin nhắn do đối phương gửi
+    if (!message.isMine(_userId) && message.messageId.isNotEmpty) {
+      _repository.sendReadStatus(
+        conversationId: _conversationId,
+        messageId: message.messageId,
+      );
+    }
+  }
+
+  Future<void> fetchFirstPage({bool showLoading = true}) async {
+    if (showLoading) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
+
+    try {
+      final response = await _repository.fetchMessages(
+        _conversationId,
+        limit: 20,
+      );
+      _messages = response.messages;
+      _after = response.after;
+      _hasNext = response.hasNext;
+      _errorMessage = null;
+
+      await _repository.saveCachedMessages(
+        userId: _userId,
+        conversationId: _conversationId,
+        messages: _messages,
+      );
+    } on AppFailure catch (failure) {
+      _errorMessage = failure.message;
+    } catch (_) {
+      _errorMessage = 'Không thể tải tin nhắn.';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadEarlierMessages() async {
+    if (_isLoadingEarlier || !_hasNext || _after == null) return;
+
+    _isLoadingEarlier = true;
+    notifyListeners();
+
+    try {
+      final response = await _repository.fetchMessages(
+        _conversationId,
+        after: _after,
+        limit: 20,
+      );
+
+      final existingIds = _messages.map((e) => e.messageId).toSet();
+      final olderMessages = response.messages.where(
+        (e) => !existingIds.contains(e.messageId),
+      );
+
+      _messages = [..._messages, ...olderMessages];
+      _after = response.after;
+      _hasNext = response.hasNext;
+    } catch (_) {
+      // Giữ nguyên khi tải thêm bị lỗi
+    } finally {
+      _isLoadingEarlier = false;
+      notifyListeners();
+    }
+  }
+
+  // --- Quản lý bản nháp (Draft) ---
+
+  void onTextChanged(String text) {
+    _draftText = text;
+
+    // 1. Lưu bản nháp an toàn có debounce 500ms
+    _draftDebounceTimer?.cancel();
+    _draftDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_draftText.trim().isEmpty) {
+        _draftStore.remove(userId: _userId, name: _draftKey);
+      } else {
+        _draftStore.save(
+          userId: _userId,
+          name: _draftKey,
+          data: {'text': _draftText},
+        );
+      }
+    });
+
+    // 2. Phát sự kiện typing qua socket (debounce 1 giây)
+    _typingDebounceTimer?.cancel();
+    _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _repository.sendTypingStatus(
+        conversationId: _conversationId,
+        isTyping: text.trim().isNotEmpty,
+      );
+    });
+  }
+
+  // --- Gửi tin nhắn Text ---
+
+  Future<void> sendTextMessage(String rawContent) async {
+    final trimmed = rawContent.trim();
+    if (trimmed.isEmpty) return;
+
+    // Tự động chuyển đổi các ký tự emote (như :)) -> 😆, <3 -> ❤️) theo yêu cầu Slide 28
+    final processedContent = ChatEmoteConverter.convertEmotes(trimmed);
+
+    // Sinh Client Message ID duy nhất để chống duplicate và chống replay request
+    final clientMsgId =
+        '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
+
+    final tempMessage = ChatMessage(
+      messageId: '',
+      clientMsgId: clientMsgId,
+      conversationId: _conversationId,
+      senderId: _userId,
+      senderName: _currentUserName,
+      content: processedContent,
+      createdAt: DateTime.now(),
+      status: MessageStatus.sending,
+    );
+
+    // 1. Optimistic Update hiển thị ngay lập tức
+    _messages.insert(0, tempMessage);
+    _draftText = '';
+    notifyListeners();
+
+    // 2. Xóa bản nháp sau khi đã bấm gửi
+    _draftStore.remove(userId: _userId, name: _draftKey);
+
+    // 3. Tắt trạng thái typing
+    _repository.sendTypingStatus(
+      conversationId: _conversationId,
+      isTyping: false,
+    );
+
+    // 4. Gửi qua STOMP WebSocket
+    try {
+      _repository.sendStompMessage(
+        conversationId: _conversationId,
+        content: processedContent,
+        clientMsgId: clientMsgId,
+      );
+
+      // Lưu cache cục bộ
+      _repository.saveCachedMessages(
+        userId: _userId,
+        conversationId: _conversationId,
+        messages: _messages,
+      );
+    } catch (_) {
+      _markMessageStatus(clientMsgId, MessageStatus.failed);
+    }
+  }
+
+  // --- Gửi tin nhắn Ảnh ---
+
+  Future<void> sendImageMessage(String imageFilePath) async {
+    final clientMsgId =
+        'img_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
+
+    final tempMessage = ChatMessage(
+      messageId: '',
+      clientMsgId: clientMsgId,
+      conversationId: _conversationId,
+      senderId: _userId,
+      senderName: _currentUserName,
+      content: '[Hình ảnh]',
+      messageType: MessageType.image,
+      mediaUrls: [imageFilePath], // Đường dẫn local hiển thị trước
+      createdAt: DateTime.now(),
+      status: MessageStatus.sending,
+    );
+
+    _messages.insert(0, tempMessage);
+    notifyListeners();
+
+    try {
+      // 1. Upload ảnh lên server với purpose=CHAT (Slide 157)
+      final uploaded = await _repository.uploadChatImage(imageFilePath);
+
+      // 2. Gửi STOMP mang URL ảnh từ server
+      _repository.sendStompMessage(
+        conversationId: _conversationId,
+        content: '[Hình ảnh]',
+        clientMsgId: clientMsgId,
+        mediaUrls: [uploaded.url],
+      );
+
+      _markMessageStatus(clientMsgId, MessageStatus.sent);
+    } catch (_) {
+      _markMessageStatus(clientMsgId, MessageStatus.failed);
+    }
+  }
+
+  void retryFailedMessage(ChatMessage failedMessage) {
+    final index = _messages.indexWhere(
+      (m) => m.clientMsgId == failedMessage.clientMsgId,
+    );
+    if (index == -1) return;
+
+    _messages[index] = failedMessage.copyWith(status: MessageStatus.sending);
+    notifyListeners();
+
+    if (failedMessage.messageType == MessageType.image &&
+        failedMessage.mediaUrls.isNotEmpty) {
+      sendImageMessage(failedMessage.mediaUrls.first);
+    } else {
+      try {
+        _repository.sendStompMessage(
+          conversationId: _conversationId,
+          content: failedMessage.content,
+          clientMsgId: failedMessage.clientMsgId, // Giữ nguyên ID chống trùng
+        );
+      } catch (_) {
+        _markMessageStatus(failedMessage.clientMsgId, MessageStatus.failed);
+      }
+    }
+  }
+
+  void _markMessageStatus(String clientMsgId, MessageStatus status) {
+    final index = _messages.indexWhere((m) => m.clientMsgId == clientMsgId);
+    if (index != -1) {
+      _messages[index] = _messages[index].copyWith(status: status);
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _typingIndicatorTimer?.cancel();
+    _typingDebounceTimer?.cancel();
+    _draftDebounceTimer?.cancel();
+    super.dispose();
+  }
+}

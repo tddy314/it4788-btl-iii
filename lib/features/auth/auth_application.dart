@@ -13,8 +13,16 @@ import 'login_screen.dart';
 
 /// Điểm nối feature qua API công khai của khung app; không sửa core/router/theme.
 class AuthApplication extends StatefulWidget {
-  const AuthApplication({super.key, required this.dependencies});
+  const AuthApplication({
+    super.key,
+    required this.dependencies,
+    this.tabBuilders = const {},
+    this.protectedRoutes = const {},
+  });
   final AppDependencies dependencies;
+  final Map<AppTab, WidgetBuilder> tabBuilders;
+  final Map<String, WidgetBuilder> protectedRoutes;
+
   @override
   State<AuthApplication> createState() => _AuthApplicationState();
 }
@@ -47,15 +55,15 @@ class _AuthApplicationState extends State<AuthApplication> {
   Widget build(BuildContext context) => SqbApp(
     dependencies: widget.dependencies,
     loginBuilder: (_) => LoginScreen(auth: _auth),
-    // Tạm đặt menu cài đặt vào tab Cá nhân; người làm hồ sơ có thể thay builder,
-    // mở menu qua SettingsRoutes.settings, không cần viết lại auth.
     tabBuilders: {
       AppTab.profile: (_) => SettingsScreen(auth: _auth, embedded: true),
+      ...widget.tabBuilders,
     },
     protectedRoutes: {
       SettingsRoutes.settings: (_) => SettingsScreen(auth: _auth),
       SettingsRoutes.changePassword: (_) =>
           ChangePasswordScreen(repository: _repository),
+      ...widget.protectedRoutes,
     },
   );
 }

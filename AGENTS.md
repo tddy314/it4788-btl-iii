@@ -1,36 +1,37 @@
 # Context cho AI làm việc trong dự án SQB
+> Đọc file này trước khi code. Hướng dẫn áp dụng cho toàn repository và từng nhánh feature. Đây là quyết định, quy ước và đặc tả kỹ thuật đã chốt của dự án; yêu cầu mới, rõ ràng của người dùng có thể cập nhật chúng. Kiểm tra code thực tế trước khi sửa vì hiện trạng có thể thay đổi sau mỗi lần merge.
 
-Đọc file này trước khi code. Hướng dẫn áp dụng cho toàn repository. Đây là quyết định và quy ước dự án; yêu cầu mới, rõ ràng của người dùng có thể cập nhật chúng. Kiểm tra code thực tế trước khi sửa vì hiện trạng có thể thay đổi sau mỗi lần merge.
+---
 
 ## 1. Phạm vi đã chốt với nhóm
 
-- Bài tập lớn IT4788: mạng xã hội cho sinh viên đóng góp câu hỏi vào ngân hàng đề theo môn học; trải nghiệm giao diện giống Facebook.
-- Flutter, chỉ triển khai Android mobile, giao diện và thông báo cho người dùng bằng tiếng Việt.
-- Nhóm làm frontend và tích hợp server của thầy; không triển khai backend, database, thuật toán AI hay trang admin.
-- **Thầy cấp tài khoản: không làm đăng ký hoặc OTP kích hoạt từ đăng ký.** Đổi mật khẩu sau đăng nhập là chức năng riêng.
-- **Phải đăng nhập trước khi vào bảng tin, xem bài và tương tác. Không có chế độ khách.** Đề xuất cho khách xem bài đã được hủy sau khi xác nhận API đọc bài cần token.
-- Khi còn phiên đăng nhập, mất mạng không đồng nghĩa với đăng xuất; có thể xem nội dung đã lưu trên máy.
-- Luồng chính: đăng nhập → chọn môn đang học → soạn/nộp bộ câu hỏi → theo dõi đề xuất; bổ sung các tính năng xã hội theo công việc được giao.
-- Chỉ triển khai tính năng được giao. Không tự mở rộng sang minigame, AI, chat nhóm, duyệt câu hỏi hay sinh đề cho giảng viên.
+- **Bài tập lớn IT4788:** Mạng xã hội cho sinh viên đóng góp câu hỏi vào ngân hàng đề theo môn học; trải nghiệm giao diện và tương tác quen thuộc tương tự Facebook.
+- **Nền tảng & Ngôn ngữ:** Flutter, chỉ triển khai Android mobile, toàn bộ giao diện và thông báo người dùng bằng **tiếng Việt**.
+- **Phạm vi kỹ thuật:** Nhóm chỉ làm **Frontend** và tích hợp vào hệ thống Backend có sẵn do thầy giáo cung cấp; không triển khai backend, database, thuật toán AI hay trang admin.
+- **Tài khoản:** **Thầy cấp tài khoản: không làm đăng ký hoặc OTP kích hoạt từ đăng ký.** Đổi mật khẩu sau đăng nhập là chức năng riêng.
+- **Quyền truy cập:** **Phải đăng nhập trước khi vào bảng tin, xem bài và tương tác. Không có chế độ khách (Guest mode).** Mọi API đọc/ghi đều yêu cầu Bearer token.
+- **Quản lý phiên:** Khi còn phiên đăng nhập, mất mạng không đồng nghĩa với đăng xuất; có thể xem nội dung đã lưu trên máy.
+- **Luồng chính:** Đăng nhập → Chọn môn đang học → Soạn/nộp bộ câu hỏi → Theo dõi đề xuất; bổ sung các tính năng xã hội theo công việc được phân công.
+- **Giới hạn nghiệp vụ:** Chỉ triển khai tính năng được giao. Không tự mở rộng sang minigame, AI, chat nhóm, duyệt câu hỏi hay sinh đề cho giảng viên.
+
+---
 
 ## 2. Mất mạng là tiêu chí nghiệm thu bắt buộc
 
-**Thầy sẽ ngắt kết nối mạng trong lúc kiểm tra bài tập lớn**, quan sát việc gọi API, nội dung bài viết còn hiển thị và cách app xử lý tình huống vận hành. Mỗi feature phải xử lý cả luồng lỗi.
+**Thầy sẽ ngắt kết nối mạng trong lúc kiểm tra bài tập lớn** (bật chế độ máy bay, rút Wi-Fi, đổi mạng 4G), quan sát việc gọi API, nội dung hiển thị còn lưu trên máy và cách app xử lý tình huống vận hành. Mỗi feature phải xử lý cả luồng lỗi.
 
-1. Bảng tin giữ bài đã cache khi offline hoặc refresh thất bại; không xóa nội dung cũ để hiện trang lỗi toàn màn hình. Ảnh chưa được lưu cần fallback, không giả vờ đã có dữ liệu.
-2. Validate input trước khi kiểm tra mạng/gửi request. Có Wi-Fi/mobile chưa chắc có Internet; vẫn bắt lỗi từng request.
+1. **Bảng tin / Thông báo / Tin nhắn** giữ nội dung đã cache khi offline hoặc refresh thất bại; không xóa nội dung cũ để hiện trang lỗi toàn màn hình. Ảnh chưa được lưu cần fallback, không giả vờ đã có dữ liệu.
+2. Validate input ở client trước khi kiểm tra mạng/gửi request. Có Wi-Fi/mobile chưa chắc có Internet; vẫn bắt lỗi từng request.
 3. Không báo thành công khi server chưa xác nhận, không loading vô hạn, không retry/polling liên tục.
-4. Ngắt mạng giữa upload/đăng bài/gửi câu hỏi/chat phải giữ nội dung đang soạn và thể hiện trạng thái gửi đúng.
-5. Timeout có thể xảy ra sau khi server đã xử lý. **Không tự replay POST/PUT/PATCH/DELETE hoặc upload**; kiểm tra kết quả trước khi cho gửi lại để tránh trùng.
+4. Ngắt mạng giữa upload/đăng bài/gửi câu hỏi/chat phải giữ nội dung đang soạn (`DraftStore`) và thể hiện trạng thái gửi đúng.
+5. Timeout có thể xảy ra sau khi server đã xử lý. **Không tự replay POST/PUT/PATCH/DELETE hoặc upload**; kiểm tra kết quả trước khi cho gửi lại để tránh trùng lặp bản ghi.
 6. Khi mạng trở lại, refresh/đồng bộ có kiểm soát; tránh trùng bài/tin nhắn và request đồng thời không cần thiết.
 7. Không xóa phiên chỉ vì offline/timeout/lỗi server. Phân biệt lỗi mạng với token bị server từ chối, quyền truy cập bị thu hồi và nội dung đã xóa.
-8. Cache/bản nháp phải tách theo tài khoản, không lộ dữ liệu user cũ sau logout hoặc đổi tài khoản. Dispose controller/subscription và bỏ response cũ khi màn hình/phiên không còn phù hợp.
+8. Cache/bản nháp phải tách theo tài khoản (`userId`), không lộ dữ liệu user cũ sau logout hoặc đổi tài khoản. Dispose controller/subscription và bỏ response cũ khi màn hình/phiên không còn phù hợp.
 9. Xử lý thêm lỗi server, JSON sai/rỗng, hết trang, quyền thiết bị bị từ chối, token hết hạn, app chạy nền và đóng/mở lại.
 10. Kiểm thử trên điện thoại thật các bước ngắt mạng trước/trong thao tác và khôi phục mạng. Mock/unit test không thay cho nghiệm thu này.
 
 ### Các tình huống kiểm thử mở rộng cần dự kiến
-
-Danh sách dưới đây do nhóm chủ động dự kiến theo yêu cầu người dùng, **không phải danh sách thầy đã công bố và không có nghĩa các tình huống đã được xử lý trong code**. Khi triển khai feature, chọn các trường hợp liên quan để thiết kế, kiểm thử và ghi nhận kết quả. Không tự xây feature ngoài phạm vi chỉ để đáp ứng một trường hợp chưa áp dụng.
 
 | Nhóm | Thao tác/tình huống có thể được kiểm tra | Hành vi cần hướng tới |
 | --- | --- | --- |
@@ -74,27 +75,32 @@ Danh sách dưới đây do nhóm chủ động dự kiến theo yêu cầu ngư
 | Giao diện | Máy màn nhỏ, font hệ thống lớn, bàn phím mở, nội dung/tên rất dài | Không overflow hoặc che nút chính; cuộn được, giữ safe area và khả năng đọc/thao tác |
 | Hiệu năng | Cuộn nhiều bài/ảnh, đổi tab và mở media nhiều lần | Không tải tất cả vô hạn, không phình RAM/cache hoặc rò listener; trạng thái danh sách còn nhất quán |
 
-**Cách dùng danh sách:** với feature được giao, chuẩn bị điều kiện ban đầu → thao tác gây lỗi/thay đổi → kết quả mong đợi → phục hồi và thử lại. Kết hợp nhiều yếu tố, ví dụ token hết hạn đúng lúc đổi mạng, hoặc logout trong khi upload còn chạy. Kiểm tra lại cả UI, số request và dữ liệu thực tế trên server khi có môi trường thử phù hợp; đừng chỉ kiểm tra snackbar đã hiện.
+---
 
-Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùng fake/mock hay môi trường test có kiểm soát. Không tự phá dữ liệu, spam request, thay cấu hình thiết bị/server hoặc dùng API admin để tạo tình huống trên hệ thống dùng chung. Chỉ ghi “đã kiểm thử” khi thực sự chạy; nếu phụ thuộc backend chưa hỗ trợ thì ghi rõ giới hạn, không giả lập thành hành vi đã tích hợp.
+## 3. Hiện trạng codebase — Cập nhật tháng 11/2026
 
-## 3. Hiện trạng — cập nhật 31/10/2026
+- **Hạ tầng cốt lõi (Core/App):** Đã hoàn thiện xác thực tài khoản và khung ứng dụng qua `AuthApplication`. Màn đăng nhập kết nối API server thật, lưu phiên bảo mật, cơ chế refresh token tự động, đăng xuất cục bộ/server và đổi mật khẩu.
+- **Thành công nghiệp vụ:** Đã sửa mã thành công mặc định trong `AppConfig` thành **`1000`** (khớp với response thật của backend, thay vì `0000` như ví dụ Swagger cũ).
+- **Điểm gắn kết (Composition):** `AuthApplication` hỗ trợ tham số `tabBuilders` và `protectedRoutes` để các nhánh feature gắn màn hình mà không cần sửa code auth hay core.
+- **Cấu hình Android:** `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache do project ở ổ D: và Pub cache ở ổ C:. NDK 28, Android SDK Platform 35/36, CMake 3.22.1.
+- **Nhánh `feat5`:** Đã triển khai hoàn thiện và độc lập toàn bộ các module:
+  - `lib/features/notifications/` (Tab thông báo, Controller, Repository, Deep link).
+  - `lib/features/chat/` (Conversations, Chat detail, STOMP WSS client, Emote converter, Draft store).
+  - `lib/features/settings/` (Push Settings screen, Model, Repository, Tùy chọn âm thanh theo Slide 26/29).
 
-Đã có khung app/core và triển khai mục 1 trong `features/auth`, `features/settings`: màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai; không thay implementation của app/core. Tab Cá nhân tạm hiển thị menu cài đặt tài khoản, chưa phải hồ sơ. Những feature khác vẫn giữ `.gitkeep`; **chưa có homepage nghiệp vụ, feed cache tích hợp hay chat**.
+---
 
-Đã đối chiếu Swagger ngày 31/10/2026, chạy `flutter analyze --no-pub` sạch lỗi và 31 kiểm thử đạt. Đã cài lại NDK, bổ sung SDK/CMake và build APK debug x86_64 thành công; đã đăng nhập với server thật bằng tài khoản người dùng cung cấp trên emulator Android API 37, kiểm tra vào khung 5 tab. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:. Chưa xác nhận ARM64, thiết bị thật hoặc refresh/logout/đổi mật khẩu trên server thật. Không suy ra toàn bộ tính năng đã tích hợp từ test giả hoặc một lần login thật. Xem [hướng dẫn mục 1](docs/muc-1-auth-settings.md) để gắn các feature còn lại.
-
-## 4. Thành phần có sẵn — tái sử dụng trước khi tạo mới
+## 4. Thành phần có sẵn — Tái sử dụng trước khi tạo mới
 
 | Vị trí | Thành phần và mục đích |
 | --- | --- |
-| `lib/main.dart` | `AppBootstrap`: khởi tạo dependency, loading/thử lại khi lỗi |
-| `lib/app/app.dart` | `SqbApp`: locale vi, lifecycle, điểm gắn màn hình |
+| `lib/main.dart` | `AppBootstrap`: khởi tạo dependency, loading/thử lại khi lỗi, gọi `AuthApplication` |
+| `lib/app/app.dart` | `SqbApp`: locale vi, lifecycle, điểm gắn màn hình qua router và shell |
 | `lib/app/app_dependencies.dart`, `app_scope.dart` | `AppDependencies`, `AppScope.of(context)` cung cấp service dùng chung |
 | `lib/app/router/app_router.dart` | `AppRoutes`, `AppRouter`: bảo vệ route bằng phiên, màn chưa tìm thấy |
-| `lib/app/app_shell.dart` | `AppShell`, `AppTab`: feed, questionBank, friends, notifications, profile; chỉ khởi tạo tab khi được mở |
-| `lib/app/theme/` | `AppColors`, `AppTheme`: màu tập trung, theme Material tiếng Việt |
-| `lib/core/config/app_config.dart` | `AppConfig`: HTTPS base URL, timeout, success code qua dart-define |
+| `lib/app/app_shell.dart` | `AppShell`, `AppTab`: feed, questionBank, friends, notifications, profile |
+| `lib/app/theme/` | `AppColors`, `AppTheme`: màu tập trung, theme Material 3 tiếng Việt |
+| `lib/core/config/app_config.dart` | `AppConfig`: HTTPS base URL, timeout, success code (`1000`) |
 | `lib/core/network/api_client.dart` | `ApiClient`: get/request, Bearer token, envelope, lỗi, cancel/progress, điểm nối refresh token |
 | `lib/core/network/connection_monitor.dart` | `ConnectionMonitor`, `DeviceConnectionMonitor`, `ConnectionStatus`: unknown/offline/available |
 | `lib/core/errors/app_failure.dart` | `AppFailure`, `FailureKind`, `canUseCache`: lỗi thống nhất để UI xử lý |
@@ -106,87 +112,119 @@ Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùn
 | `lib/core/media/media_upload_service.dart` | `MediaUploadService`, `MediaPurpose`, `UploadedMedia`: upload multipart, kiểm tra dung lượng, progress/cancel |
 | `lib/core/widgets/` | `AppButton`, `AppTextField`, loading/empty/error, `ConnectionBanner`, `AppNetworkImage`, `AppAvatar`, `CachedResourceView<T>` |
 | `lib/core/validation/validators.dart` | `Validators`: bắt buộc, đếm từ, giới hạn số từ |
-| `test/support/fakes.dart` | `MemoryStore`, `FakeConnection`: test không phụ thuộc plugin thật |
-| `lib/features/auth/` | `AuthApplication`, `AuthController`, `AuthRepository`, `DeviceIdentity`, `LoginScreen`, `AuthValidation`: xác thực qua core và UUID cài đặt bền vững |
-| `lib/features/settings/` | `SettingsScreen`, `SettingsRoutes`, `ChangePasswordScreen`: menu tài khoản, đổi mật khẩu, đăng xuất và đóng app |
+| `lib/features/auth/` | `AuthApplication`, `AuthController`, `AuthRepository`, `DeviceIdentity`, `LoginScreen` |
+| `lib/features/settings/` | `SettingsScreen`, `SettingsRoutes`, `ChangePasswordScreen`, `PushSettingsScreen` |
 
-Dependencies đã có: Flutter localizations, Dio, flutter_secure_storage, shared_preferences, connectivity_plus, cached_network_image. Đọc `pubspec.yaml`/lock để biết phiên bản; không tự thêm một HTTP client, storage hoặc giải pháp quản lý trạng thái thứ hai cho cùng mục đích.
+---
 
-## 5. Quy tắc tích hợp feature
+## 5. Quy tắc tích hợp feature & Bảo vệ phần dùng chung
 
-- UI lấy service qua `AppScope.of(context)`, truyền dependency vào controller/repository. Không gọi HTTP trực tiếp từ widget hoặc tạo token store riêng.
-- `SqbApp` nhận `loginBuilder`, `tabBuilders: Map<AppTab, WidgetBuilder>` và `protectedRoutes: Map<String, WidgetBuilder>`. Gắn màn vào đây; giữ một `MaterialApp` và cơ chế router chung.
-- Auth gọi login với `authenticated: false`, map user ID thành chuỗi trong `SessionTokens`, rồi `await session.save(tokens)`. `session.clear()` bỏ stack điều hướng của user cũ.
-- `AuthApplication` đã gắn `ApiClient.refreshTokens` vào `AuthController.refresh`. Callback dùng API refresh với `authenticated: false`, trả cặp token mới cùng user ID; **không tự save token trong callback**. Client gom refresh đồng thời, save token và chỉ retry GET/HEAD một lần. Server từ chối refresh bằng lỗi xác thực/quyền thì auth xóa đúng phiên cũ; lỗi mạng giữ phiên. Chưa kiểm chứng refresh bằng tài khoản/server thật.
-- Client nhận đường dẫn tương đối sau base URL, ví dụ `posts`, không gắn thêm `/api/v1` và không truyền URL domain khác. `decode` nhận payload `data`, không phải toàn response.
-- Request của client cần envelope JSON; tải file binary hoặc upload presigned cần đường xử lý riêng phù hợp, không gửi Bearer token sang domain khác.
-- `MediaUploadService` chỉ upload file; feature vẫn phải chọn/chụp media, kiểm tra loại/thời lượng/số lượng và tạo DTO nghiệp vụ từ kết quả upload.
-- Dùng `AppColors`/theme và widget chung. Không tạo màu, thông báo lỗi hoặc loading riêng rải rác nếu core đã đáp ứng.
-- Không áp đặt thêm nhiều tầng kiến trúc cho mọi tính năng. Đặt code riêng trong feature; việc đưa thành phần mới vào core là nhiệm vụ dùng chung riêng, không tự thực hiện trong lúc làm feature.
+- **Nguyên tắc bất khả xâm phạm:** Khi làm việc trên nhánh feature (như `feat5`), **ưu tiên tái sử dụng `core` và `app`. Tuyệt đối không tự ý sửa đổi code dùng chung hoặc code của thành viên khác** để ép phục vụ feature của mình.
+- **Điểm kết nối:** Mọi feature được gắn thông qua các API công khai của `AuthApplication` (`tabBuilders` và `protectedRoutes`) trong `lib/main.dart`.
+- **Giao diện đồng nhất:**
+  - Tái sử dụng bảng màu `AppColors` và typography từ `Theme.of(context)`. Không tạo bảng màu hay theme riêng lẻ.
+  - Sử dụng chung thuật ngữ tiếng Việt: "Đang gửi…", "Thử lại", "Đã gửi", "Đã xem", "Không có kết nối mạng".
+  - Các trạng thái phải dùng widget chuẩn: `AppLoadingState`, `AppEmptyState`, `AppErrorState`, `ConnectionBanner`.
+- **Cache & Bản nháp:**
+  - `JsonCache`: Lưu trữ danh sách thông báo, danh sách hội thoại, lịch sử tin nhắn cục bộ theo `userId`. Giới hạn số lượng bản ghi (không cache vô hạn gây tràn bộ nhớ).
+  - `DraftStore`: Lưu văn bản đang gõ dở vào secure storage; tự động phục hồi khi mở lại và xóa sau khi gửi thành công.
 
-### Bảo vệ phần dùng chung
+---
 
-- **Ưu tiên tái sử dụng; nếu thành phần có sẵn không đáp ứng thì tự viết widget/helper/adapter hoặc logic riêng trong feature đang phụ trách. Không sửa phần dùng chung để ép nó phục vụ feature của mình.** Có thể bọc hoặc kết hợp thành phần hiện có qua API công khai.
-- Khi làm feature, không tự thay đổi implementation, chữ ký hàm, giá trị mặc định hoặc hành vi của `lib/core`, khung `lib/app`, theme hay dependency chung. Không sửa kiểm thử chung để hợp thức hóa thay đổi riêng của feature.
-- Chỉ sửa phần dùng chung khi người dùng giao rõ nhiệm vụ đó. Nếu phát hiện hạn chế/lỗi của core trong lúc làm feature, ghi rõ vấn đề và giới hạn trong bàn giao; không âm thầm sửa. Phần riêng vẫn phải tuân thủ quy tắc token, quyền, lỗi và offline của dự án.
-- Dùng các điểm nối đã có như builder, route registration và dependency injection để tích hợp. Không thay kiến trúc app, tạo thêm `MaterialApp` hoặc viết lại hạ tầng chung chỉ vì một màn hình cần khác biệt.
+## 6. Hợp đồng nghiệp vụ & API cần nhớ
 
-### Giao diện đồng nhất giữa các thành phần
+- **Base URL:** `https://snsqb.duckdns.org/api/v1/`
+- **Mã thành công chuẩn:** **`1000`** (chú ý: Swagger ghi `0000` là sai lệch so với server thật).
+- **Header bắt buộc:** `Authorization: Bearer <access_token>` (trừ login/refresh).
+- **Giới hạn bài viết & bình luận:** Tối đa 500 từ; tối đa 4 ảnh hoặc 1 video (1–10 giây, tối đa 10 MB).
+- **Đánh giá câu hỏi:** Thang điểm từ **0 đến 4** (0 là giá trị hợp lệ, không dùng truthy check để loại bỏ 0).
+- **Không gọi API admin từ ứng dụng di động.**
 
-- **Màn hình và widget mới phải thống nhất với giao diện hiện có**, kể cả khi phải tự viết phần riêng. Tái sử dụng `AppTheme`, `AppColors` và text style từ `Theme.of(context)`; không tạo theme/bảng màu riêng cho từng feature.
-- Giữ nhất quán kiểu chữ, cỡ chữ theo vai trò, khoảng cách, bo góc, kích thước nút/ô nhập/avatar, icon và cách bố trí AppBar/điều hướng. Trước khi dựng màn hình, đối chiếu component và màn đã có thay vì tự thiết kế lại.
-- Các trạng thái loading, rỗng, lỗi, offline, disabled và đang gửi phải có cách trình bày và thông báo tiếng Việt nhất quán; ưu tiên widget chung. Thành phần tự viết cần khớp các quy ước này.
-- Dùng cùng thuật ngữ cho cùng thao tác, ví dụ “Thích”, “Bình luận”, “Thử lại”; không trộn tiếng Anh hoặc đổi nhãn tùy từng màn. Giữ cách hiển thị số đếm, thời gian và trạng thái tương đồng.
-- Khi chưa có mẫu cho một thành phần, chọn cách thể hiện phù hợp với theme hiện tại và ghi nhận lựa chọn để thành viên khác dùng theo; không tự sửa theme chung. Kiểm tra cả màn nhỏ, font lớn và bàn phím mở để sự đồng nhất vẫn dùng được trên thiết bị thật.
-
-### Cache và bản nháp
-
-- `dependencies.cache` dùng preferences cho JSON **không nhạy cảm**, mặc định tối đa 512 KiB/record; feature phải giới hạn số bài lưu. Không lưu token, tin nhắn riêng tư hoặc cache toàn lịch sử vô hạn vào đây.
-- `CachedResourceController<T>` cần userId/resource, fetch và encode/decode. Feature gọi `load()` lúc khởi tạo/refresh, dispose khi đổi màn/phiên, tự xử lý phân trang và ghép bản ghi. `CachedResourceView` không tự khởi chạy load.
-- `AppNetworkImage` cache ảnh trên đĩa theo cơ chế thư viện. Chỉ ảnh đã lưu thành công có thể xem offline; cache có thể bị dọn. Chưa có đảm bảo video offline.
-- `dependencies.drafts` dùng secure storage. Feature phải chủ động save/read/remove, giữ draft khi lỗi và chỉ xóa sau khi thao tác được xác nhận. File tạm cần được sao chép sang nơi bền vững nếu muốn khôi phục media sau khi mở lại app.
-
-## 6. Hợp đồng nghiệp vụ và API cần nhớ
-
-- **Bắt buộc đọc kỹ Swagger của từng endpoint trước khi code hoặc sửa tích hợp API.** Kiểm tra method/path, header/token, quyền, nền tảng, content type, tham số bắt buộc/tùy chọn, kiểu dữ liệu, enum, nullability, phân trang và response thành công/thất bại; không chỉ sao chép JSON ví dụ hoặc suy đoán theo tên API.
-- Phân biệt schema/mô tả với ví dụ minh họa. Đối chiếu response thật trong môi trường và phạm vi được phép thử, nhất là HTTP status, `code`, payload `data`, token/cookie và khác biệt WEB/ANDROID. Nếu chưa thể kiểm chứng thì ghi rõ giả định, không báo là đã tích hợp thành công.
-- Khi Swagger và server không khớp, ghi lại khác biệt đã quan sát (không lưu mật khẩu/token), cập nhật mapping/cấu hình và test hồi quy theo hợp đồng đã xác nhận; không bỏ kiểm tra lỗi hoặc mặc định mọi HTTP 200 đều thành công. Test giả phải phản ánh response thực tế đã biết, không chỉ xác nhận giả định do người code tự đặt ra.
-- [Swagger](https://snsqb.duckdns.org/api/v1/swagger-ui/index.html), [OpenAPI JSON](https://snsqb.duckdns.org/api/v1/docs/openapi.json). Đọc lại phần endpoint/schema liên quan khi tích hợp; tài liệu có thể thay đổi. **Không gọi API admin từ app**.
-- Base URL mặc định: `https://snsqb.duckdns.org/api/v1/`. Mã thành công mặc định đã sửa thành **`1000`** theo response login thật ngày 31/10/2026; Swagger minh họa `0000` không khớp server hiện tại. HTTP 200 chưa đủ để kết luận nghiệp vụ thành công. Đã xác nhận login payload ANDROID trả cả access/refresh token; payload WEB có thể trả refresh token null, không áp kết luận đó cho Android. Không lưu tài khoản thử hoặc token vào repo.
-- API bảng tin và chi tiết bài đã được thử không token và trả HTTP 401/code 9998. Public visibility không đồng nghĩa với truy cập ẩn danh.
-- PDF yêu cầu bài viết/bình luận tối đa **500 từ**, bài public, một loại Like, tối đa **4 ảnh hoặc 1 video**, không trộn ảnh/video. Ảnh tối đa 4 MB; video tối đa 10 MB và 1–10 giây. Không tự mở thêm reaction/privacy vì Swagger hỗ trợ nhiều hơn.
-- Không tự thêm share, tag, nhóm xã hội, chat nhóm, sửa bình luận hay tự xóa tài khoản chỉ vì giống Facebook hoặc vì có API; xem phạm vi đã chốt cho từng chức năng.
-- Nộp bộ câu hỏi hiện dùng JSON + ảnh upload, chưa xác nhận luồng nhập ZIP. Theo schema từng endpoint: tạo dùng `llm_generated`, sửa dùng `source`; ảnh gửi `media_urls` nhưng đọc có thể `image_urls`; tự tin `confidence`/`confidence_score`.
-- Phân biệt phiên đề xuất với phiên đăng nhập. Phiên có `PENDING`/`REVIEWING`/`RESOLVED`; **RESOLVED không có nghĩa mọi câu được duyệt**. Sửa/xóa phiên chỉ khi server cho phép, hiện mô tả là PENDING.
-- Thang đánh giá câu hỏi **0–4**, không phải 1–5. Không suy đáp án đúng khi server ẩn trường `is_correct`; lấy kết quả từ server.
-- Phân trang phổ biến `after`, `limit`, `pagination.has_next`, nhưng search có thể dùng offset. Không giả định mọi endpoint giống nhau.
-- Nguồn tự làm/AI phải ẩn với giảng viên theo PDF; UI tuân theo vai trò, backend phải thực thi quyền. Không rò rỉ thông tin này qua card công khai.
-- Chat STOMP, push/Firebase, FID so với FCM token và dữ liệu duyệt cần kiểm chứng khi làm feature; chưa phải service đã hoàn thiện trong core.
+---
 
 ## 7. Ranh giới công việc của 5 thành viên
 
-| Thành viên | Phạm vi chủ trì |
-| --- | --- |
-| 1 | `app`, `core`, `features/auth`, ghép menu settings, cấu hình Android và tích hợp |
-| 2 | `features/feed`, `features/posts`; media picker/viewer và bình luận dùng chung |
-| 3 | `features/question_bank` |
-| 4 | `features/profile`, `features/relationships`, `features/search`; danh sách chặn trong settings |
-| 5 | `features/chat`, `features/notifications`; cài đặt thông báo trong settings |
+| Thành viên | Nhánh Git | Phạm vi chủ trì |
+| :---: | :---: | :--- |
+| **1** | `main` / `feat1` | `app`, `core`, `features/auth`, ghép menu settings, cấu hình Android và tích hợp |
+| **2** | `feat2` | `features/feed`, `features/posts`; media picker/viewer và bình luận |
+| **3** | `feat3` | `features/question_bank` (đóng góp câu hỏi, theo dõi duyệt, luyện tập) |
+| **4** | `feat4` | `features/profile`, `features/relationships`, `features/search`; danh sách chặn |
+| **5** | **`feat5`** | **`features/chat`, `features/notifications`; cài đặt thông báo trong settings** |
 
-Đây là phân công tham khảo đã thống nhất, không cấm nhiệm vụ mới do người dùng giao. Khi được giao rõ nhiệm vụ sửa API chung, router, dependency hoặc Android config, giữ tương thích với các feature khác và ghi rõ thay đổi tích hợp. Trong nhiệm vụ feature thông thường, tuân thủ mục “Bảo vệ phần dùng chung”. Không sửa/xóa công việc đang có của thành viên khác ngoài phạm vi nhiệm vụ.
+---
 
-## 8. Kiểm tra và bàn giao
+## 8. Hướng dẫn chi tiết cho AI Model trên nhánh feat5 (Thành viên 5)
+
+Nhánh **`feat5`** chịu trách nhiệm toàn bộ các tính năng liên quan đến **Thông báo**, **Trò chuyện 1–1 Realtime & Offline**, và **Cài đặt thông báo & Quản trị thiết bị**. Dưới đây là các yêu cầu chi tiết bắt buộc phải tuân thủ:
+
+### A. Hệ thống Thông báo (`lib/features/notifications`)
+1. **Giao diện & Điều hướng:**
+   - Cung cấp `NotificationsTab` gắn vào `AppTab.notifications` của `AppShell`.
+   - Hiển thị danh sách thông báo có avatar (`AppAvatar`), icon phân loại tương tác (like, comment, duyệt đề, tin nhắn, bạn bè), thời gian tương đối và chấm xanh chưa đọc.
+   - Hỗ trợ Pull-to-refresh và phân trang cuộn vô hạn (`after`, `has_next`).
+2. **Đánh dấu đã đọc:**
+   - Nhấn vào một thông báo: Optimistic update sang đã đọc, gọi `POST /notifications/{id}/read`.
+   - Nút "Đánh dấu tất cả đã đọc" trên AppBar: Gọi `POST /notifications/read-all`.
+3. **Deep Linking an toàn:**
+   - Phân tích `target.type`:
+     - `POST` → Mở chi tiết bài viết.
+     - `QUESTION_SESSION` → Mở chi tiết đề xuất câu hỏi.
+     - `CHAT` / `MESSAGE` → Mở màn hình chat chi tiết với người gửi.
+     - `FRIEND_REQUEST` / `PROFILE` → Mở trang cá nhân.
+   - **Xử lý 404/403:** Nếu đối tượng đích đã bị xóa, hiển thị SnackBar tiếng Việt: *"Nội dung này không còn tồn tại hoặc bạn không có quyền xem"*, **tuyệt đối không để ứng dụng crash**.
+4. **Offline Cache:** Đọc từ `JsonCache` theo `userId` trước; khi offline kéo làm mới phải giữ nguyên dữ liệu, không xóa trắng màn hình.
+
+### B. Trò chuyện 1–1 Realtime & Offline (`lib/features/chat`)
+1. **Phạm vi chat:**
+   - **Chỉ làm chat 1–1 (Direct chat)**; không làm chat nhóm theo quy định Slide 25.
+   - Màn hình danh sách cuộc trò chuyện: `ConversationsScreen` (route `'/conversations'`), tải qua `GET /conversations`.
+   - Tạo/mở chat 1–1: `POST /conversations/direct` với `{ "target_user_id": id }`.
+2. **Màn hình hội thoại & Tin nhắn:**
+   - `ChatDetailScreen` (route `'/chat'`): Lấy lịch sử qua `GET /conversations/{id}/messages`, cuộn ngược (Reverse Scroll) để tải tin cũ.
+   - Bong bóng chat: Tin của mình bên phải (`AppColors.primary`), tin đối phương bên trái.
+   - Trạng thái tin nhắn: Đang gửi (spinner) → Đã gửi (dấu tick) → Lỗi (dấu chấm than đỏ kèm nút "Thử lại").
+3. **Quy định Slide 28 của giảng viên:**
+   - **Chuyển đổi ký tự emote:** Tự động chuyển các ký tự đặc biệt (`:))` → 😆, `:)` → 😊, `<3` → ❤️, `B)` → 😎, `(y)` → 👍 thành biểu tượng tương ứng qua `ChatEmoteConverter`.
+   - **Không cho phép tag:** Tuyệt đối không mở danh sách tag `@username` trong khung chat.
+4. **Gửi ảnh trong Chat:**
+   - Nút đính kèm ảnh: Tải lên qua `MediaUploadService` với `purpose=CHAT`, giới hạn tối đa 4 MB.
+   - Hiển thị ảnh bằng `AppNetworkImage`, nhấn vào để xem toàn màn hình.
+5. **Realtime STOMP WebSocket:**
+   - Kết nối WSS: `wss://snsqb.duckdns.org/api/v1/ws` (Header: `Authorization: Bearer <token>`).
+   - Lắng nghe tin nhắn mới: `/user/queue/messages`.
+   - Lắng nghe đang gõ (Typing): `/topic/conv.{id}.typing` (tự tắt sau 3.5 giây).
+   - Gửi tin nhắn: `SEND /app/chat.send`.
+   - Gửi đã đọc: `SEND /app/chat.read`.
+   - Gửi typing: `SEND /app/chat.typing`.
+6. **Bản nháp & Chống gửi trùng lặp:**
+   - Lưu nội dung đang gõ dở vào `DraftStore` theo `userId` và `conversationId`.
+   - Gán `client_msg_id` duy nhất cho mỗi tin nhắn; khi thử lại do lỗi mạng thì giữ nguyên ID này để chống server duplicate tin nhắn.
+
+### C. Cài đặt Thông báo & Thiết bị (`lib/features/settings`)
+1. **Giao diện & Cấu hình:**
+   - `PushSettingsScreen` (route `SettingsRoutes.pushSettings = '/settings/push'`).
+   - Tích hợp `GET /settings/push` và `PUT /settings/push`.
+   - Công tắc Master bật/tắt toàn bộ push; công tắc từng danh mục: Mạng xã hội, Ngân hàng đề, Hệ thống; bật/tắt Rung & Chuông.
+2. **Yêu cầu riêng Slide 26 & 29 của giảng viên môn IT4788:**
+   - Tùy chọn kiểu âm thanh push notification:
+     - *"Âm thanh mặc định"* (tiếng chuông hệ thống ngân vang).
+     - *"Giọng nói phát ra (File thu âm giọng nói của nhóm sinh viên)"*.
+3. **Quản trị Thiết bị (Device FID / FCM):**
+   - Đăng ký thiết bị khi login: `POST /devices/register` (hoặc `/devices/fid`).
+   - Hủy đăng ký khi logout: `DELETE /devices/register` (hoặc `/devices/fid/unregister`).
+
+---
+
+## 9. Kiểm tra và bàn giao
 
 ```sh
 flutter pub get
 dart format lib test
-flutter analyze
-flutter test
+flutter analyze --no-pub
+flutter test --no-pub
 ```
 
-- Chạy kiểm tra phù hợp với phần đã thay đổi. Thêm test có ích cho validation/DTO/logic phức tạp, cache, session, retry; không viết test chỉ sao chép implementation hoặc UI tĩnh.
-- Không đưa password/token vào source, log, fixture, dart-define hoặc Git. Không tự tạo tài khoản, dữ liệu hay thay đổi server để thử nếu chưa có yêu cầu phù hợp.
-- Kết quả bàn giao phải nêu đã làm gì, thành phần dùng lại, kiểm tra đã chạy và phần chưa xác nhận. Dữ liệu giả/placeholder không được báo thành tích hợp thật.
-- Cập nhật file này khi quyết định phạm vi, API chung hoặc hiện trạng thay đổi đáng kể. Ghi trạng thái thực tế, không chép lịch sử hội thoại dài hoặc biến giả định thành yêu cầu đã chốt.
-
-Đọc thêm: [hướng dẫn khung app](docs/khung-app.md), [phân tích yêu cầu](docs/phan-tich-yeu-cau-frontend.md), PDF trong `docs/`. File phân công cá nhân `docs/phan-cong-nhom.md` đang bị `.gitignore` bỏ qua; không dựa riêng vào file đó làm context cho người clone repository.
+- Chạy kiểm tra phù hợp với phần đã thay đổi.
+- Không đưa password/token vào source code, log, fixture, dart-define hoặc Git.
+- Bàn giao phải nêu rõ: những gì đã làm, thành phần tái sử dụng, kiểm thử đã chạy và các điểm cần lưu ý khi merge.
