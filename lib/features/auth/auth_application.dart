@@ -6,6 +6,7 @@ import '../../app/app_shell.dart';
 import '../../core/storage/key_value_store.dart';
 import '../settings/change_password_screen.dart';
 import '../settings/settings_screen.dart';
+import '../feed/feed_screen.dart';
 import 'auth_controller.dart';
 import 'auth_repository.dart';
 import 'device_identity.dart';
@@ -50,6 +51,7 @@ class _AuthApplicationState extends State<AuthApplication> {
     // Tạm đặt menu cài đặt vào tab Cá nhân; người làm hồ sơ có thể thay builder,
     // mở menu qua SettingsRoutes.settings, không cần viết lại auth.
     tabBuilders: {
+      AppTab.feed: (_) => const FeedScreen(),
       AppTab.profile: (_) => SettingsScreen(auth: _auth, embedded: true),
     },
     protectedRoutes: {

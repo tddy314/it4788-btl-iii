@@ -78,7 +78,15 @@ Danh sách dưới đây do nhóm chủ động dự kiến theo yêu cầu ngư
 
 Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùng fake/mock hay môi trường test có kiểm soát. Không tự phá dữ liệu, spam request, thay cấu hình thiết bị/server hoặc dùng API admin để tạo tình huống trên hệ thống dùng chung. Chỉ ghi “đã kiểm thử” khi thực sự chạy; nếu phụ thuộc backend chưa hỗ trợ thì ghi rõ giới hạn, không giả lập thành hành vi đã tích hợp.
 
-## 3. Hiện trạng — cập nhật 31/10/2026
+## 3. Hiện trạng — cập nhật 07/11/2026
+
+Mục 2 đã gắn `FeedScreen` vào `AppTab.feed` trong `AuthApplication`. Bảng tin, bài của tôi, chi tiết, soạn/sửa/xóa bài, Like, bình luận, báo cáo, chọn/chụp ảnh và chọn/quay/xem video nằm trong `features/feed` và `features/posts`. Cache trang chủ chỉ lưu bài đã xác nhận PUBLIC và phần hiển thị của sự kiện, tối đa 40 mục theo tài khoản. Bản nháp và trạng thái upload tách riêng theo tài khoản. Đọc [bàn giao mục 2](docs/muc-2-feed-posts.md) để xem hợp đồng API, các giới hạn đã kiểm chứng và kịch bản nghiệm thu trên điện thoại. Ngày 05/11/2026, analyze sạch và 61 kiểm thử đạt. Đã đối chiếu tạo bài ảnh/video, Like, bình luận, sửa/xóa và dọn media trên backend thật. Sự kiện CREATED_POST có thể còn sau khi bài bị xóa, nên cần kiểm tra quyền/chi tiết trước khi hiển thị. Các phần ngân hàng câu hỏi, quan hệ, hồ sơ, chat và thông báo vẫn thuộc thành viên phụ trách.
+
+Trước khi bàn giao mục 2, đã chạy APK release trên Android ảo với server thật. Sau khi tắt mạng, force-stop rồi mở lại, sự kiện đã cache và bản nháp có ảnh vẫn xuất hiện. Giữ bản khóa `shared_preferences_android` 2.5.4 hoặc bản tương thích có sửa lỗi R8/JNI, vì bản khóa 2.5.1 đã gây lỗi cache khi chạy release. Hãy kiểm tra cache bằng APK release trên thiết bị khi thay phiên bản plugin. Chi tiết nằm trong tài liệu mục 2 ở trên.
+
+Ngày 07/11/2026 đã kiểm tra thêm bài ảnh thật được đăng qua UI. Sau khi Android mất toàn bộ kết nối và tiến trình bị force-stop, bảng tin vẫn hiển thị văn bản cùng ảnh đã tải. Đã xóa bài thử qua UI, đối chiếu bài và media CDN đều 404, danh sách bài cá nhân trở về trạng thái rỗng ban đầu. Analyzer chạy lại sạch lỗi. Nhánh bàn giao phần 2 là `feat2`; kiểm thử trên điện thoại vật lý vẫn cần nhóm nghiệm thu.
+
+### Mốc khung app và đăng nhập ngày 31/10/2026
 
 Đã có khung app/core và triển khai mục 1 trong `features/auth`, `features/settings`: màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai; không thay implementation của app/core. Tab Cá nhân tạm hiển thị menu cài đặt tài khoản, chưa phải hồ sơ. Những feature khác vẫn giữ `.gitkeep`; **chưa có homepage nghiệp vụ, feed cache tích hợp hay chat**.
 
