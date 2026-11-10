@@ -84,6 +84,10 @@ Thử nghiệm lỗi server/schema, race condition hoặc hết phiên nên dùn
 
 Đã đối chiếu Swagger ngày 31/10/2026, chạy `flutter analyze --no-pub` sạch lỗi và 31 kiểm thử đạt. Đã cài lại NDK, bổ sung SDK/CMake và build APK debug x86_64 thành công; đã đăng nhập với server thật bằng tài khoản người dùng cung cấp trên emulator Android API 37, kiểm tra vào khung 5 tab. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:. Chưa xác nhận ARM64, thiết bị thật hoặc refresh/logout/đổi mật khẩu trên server thật. Không suy ra toàn bộ tính năng đã tích hợp từ test giả hoặc một lần login thật. Xem [hướng dẫn mục 1](docs/muc-1-auth-settings.md) để gắn các feature còn lại.
 
+### Mục 3 — ngân hàng câu hỏi (10/11/2026)
+
+`AppTab.questionBank` gắn `QuestionBankTab`; route con đăng ký qua `QuestionBankRoutes.routes` trong `AuthApplication`. Gồm đề xuất câu hỏi theo lớp học phần, theo dõi/sửa/xóa phiên PENDING, kho luyện tập, trả lời, đánh giá 0–4 và báo lỗi. Có cache và bản nháp theo tài khoản, chống gửi trùng sau timeout. Analyze sạch, 66 test đạt; **chưa kiểm chứng với server thật hoặc điện thoại thật**. Xem [bàn giao mục 3](docs/muc-3-question-bank.md).
+
 ## 4. Thành phần có sẵn — tái sử dụng trước khi tạo mới
 
 | Vị trí | Thành phần và mục đích |
