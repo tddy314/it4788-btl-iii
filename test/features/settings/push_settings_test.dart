@@ -5,14 +5,14 @@ void main() {
   group('Push Settings Model (Yêu cầu IT4788 Slide 26, 29, 197-200)', () {
     test('PushSettings parses server JSON correctly', () {
       final json = {
-        'push_enabled': 'true',
+        'push_enabled': true,
         'categories': {
-          'social': {'enabled': 'true', 'description': 'Mạng xã hội'},
-          'academic': {'enabled': 'false', 'description': 'Ngân hàng đề'},
-          'system': {'enabled': 'true', 'description': 'Hệ thống'},
+          'SOCIAL': {'enabled': true, 'description': 'Mạng xã hội'},
+          'ACADEMIC': {'enabled': false, 'description': 'Ngân hàng đề'},
+          'SYSTEM': {'enabled': true, 'description': 'Hệ thống'},
         },
-        'sound_enabled': 'true',
-        'vibration_enabled': 'false',
+        'sound_enabled': true,
+        'vibration_enabled': false,
         'sound_type': 'voice',
       };
 
@@ -35,7 +35,7 @@ void main() {
 
       final json = settings.toJson();
 
-      expect(json['push_enabled'], 'false');
+      expect(json['push_enabled'], isFalse);
       expect(json['sound_type'], 'voice');
       expect(json['categories'], isA<Map<String, dynamic>>());
     });

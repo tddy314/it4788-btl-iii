@@ -25,28 +25,20 @@ class PushSettingsRepository {
     );
   }
 
-  Future<void> registerDevice({
-    required String fcmToken,
-    required String deviceName,
-  }) async {
+  Future<void> registerDevice({required String fid}) async {
     await api.request(
-      'devices/register',
+      'devices/fid',
       method: 'POST',
-      data: {
-        'fcm_token': fcmToken,
-        'platform': 'ANDROID',
-        'device_name': deviceName,
-        'app_version': '1.0.0',
-      },
+      data: {'fid': fid},
       decode: (_) => null,
     );
   }
 
-  Future<void> unregisterDevice(String fcmToken) async {
+  Future<void> unregisterDevice(String fid) async {
     await api.request(
-      'devices/register',
-      method: 'DELETE',
-      data: {'fcm_token': fcmToken},
+      'devices/fid/unregister',
+      method: 'POST',
+      data: {'fid': fid},
       decode: (_) => null,
     );
   }

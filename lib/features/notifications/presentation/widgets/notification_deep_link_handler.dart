@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../profile/profile_models.dart';
+import '../../../question_bank/question_bank_routes.dart';
 import '../../models/notification_item.dart';
 
 class NotificationDeepLinkHandler {
@@ -25,17 +27,18 @@ class NotificationDeepLinkHandler {
 
         case 'QUESTION_SESSION':
         case 'SESSION':
-          Navigator.of(context).pushNamed(
-            '/question-bank/session',
-            arguments: {'sessionId': target.id},
-          );
+          final sessionId = int.tryParse(target.id);
+          if (sessionId != null) {
+            Navigator.of(context)
+                .pushNamed(QuestionBankRoutes.submission, arguments: sessionId);
+          }
           break;
 
         case 'FRIEND_REQUEST':
         case 'PROFILE':
         case 'USER':
           Navigator.of(context)
-              .pushNamed('/users/profile', arguments: {'userId': target.id});
+              .pushNamed(ProfileRoutes.user, arguments: target.id);
           break;
 
         default:

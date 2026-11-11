@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_scope.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_states.dart';
 import '../controllers/conversations_controller.dart';
@@ -68,12 +69,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Nhập mã sinh viên hoặc ID người dùng muốn trò chuyện:'),
+            const Text(
+              'Nhập ID tài khoản (user_id) của người muốn trò chuyện:',
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: targetIdController,
+              keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                hintText: 'Ví dụ: 20210001 hoặc 45',
+                hintText: 'Ví dụ: 2 hoặc 5',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
@@ -88,36 +92,53 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           FilledButton(
             onPressed: () async {
               final targetId = targetIdController.text.trim();
-              if (targetId.isNotEmpty) {
-                Navigator.of(ctx).pop();
-                try {
-                  final deps = AppScope.of(context);
-                  final repo = ChatRepository(
-                    api: deps.api,
-                    cache: deps.cache,
-                    mediaUploadService: deps.mediaUpload,
+              final parsed = int.tryParse(targetId);
+              if (parsed == null || parsed <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Vui lòng nhập ID người dùng là số nguyên dương.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              Navigator.of(ctx).pop();
+              try {
+                final deps = AppScope.of(context);
+                final repo = ChatRepository(
+                  api: deps.api,
+                  cache: deps.cache,
+                  mediaUploadService: deps.mediaUpload,
+                );
+                final conv = await repo.createDirectConversation(
+                  targetId,
+                  currentUserId: deps.session.tokens?.userId,
+                );
+                if (context.mounted) {
+                  Navigator.of(context).pushNamed(
+                    '/chat',
+                    arguments: {
+                      'conversationId': conv.conversationId,
+                      'partnerName': conv.displayName,
+                      'partnerAvatarUrl': conv.displayAvatarUrl,
+                    },
                   );
-                  final conv = await repo.createDirectConversation(targetId);
-                  if (context.mounted) {
-                    Navigator.of(context).pushNamed(
-                      '/chat',
-                      arguments: {
-                        'conversationId': conv.conversationId,
-                        'partnerName': conv.displayName,
-                        'partnerAvatarUrl': conv.displayAvatarUrl,
-                      },
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Không thể tạo cuộc trò chuyện với người này.',
-                        ),
+                }
+              } on AppFailure catch (failure) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(failure.message)));
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Không thể tạo cuộc trò chuyện với người này.',
                       ),
-                    );
-                  }
+                    ),
+                  );
                 }
               }
             },

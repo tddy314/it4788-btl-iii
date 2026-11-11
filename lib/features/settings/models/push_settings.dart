@@ -21,7 +21,7 @@ class PushCategoryConfig {
   }
 
   Map<String, dynamic> toJson() => {
-    'enabled': enabled ? 'true' : 'false',
+    'enabled': enabled,
     'description': description,
   };
 }
@@ -88,29 +88,26 @@ class PushSettings {
         val == true || val?.toString().toLowerCase() == 'true';
 
     final categories = json['categories'] as Map<String, dynamic>? ?? {};
+    final socialRaw = categories['SOCIAL'] ?? categories['social'];
+    final academicRaw = categories['ACADEMIC'] ?? categories['academic'];
+    final systemRaw = categories['SYSTEM'] ?? categories['system'];
 
     return PushSettings(
       pushEnabled: parseBool(json['push_enabled'] ?? true),
-      social: categories['social'] is Map<String, dynamic>
-          ? PushCategoryConfig.fromJson(
-              categories['social'] as Map<String, dynamic>,
-            )
+      social: socialRaw is Map<String, dynamic>
+          ? PushCategoryConfig.fromJson(socialRaw)
           : const PushCategoryConfig(
               enabled: true,
               description: 'Mạng xã hội & Tin nhắn',
             ),
-      academic: categories['academic'] is Map<String, dynamic>
-          ? PushCategoryConfig.fromJson(
-              categories['academic'] as Map<String, dynamic>,
-            )
+      academic: academicRaw is Map<String, dynamic>
+          ? PushCategoryConfig.fromJson(academicRaw)
           : const PushCategoryConfig(
               enabled: true,
               description: 'Ngân hàng câu hỏi & Đề xuất',
             ),
-      system: categories['system'] is Map<String, dynamic>
-          ? PushCategoryConfig.fromJson(
-              categories['system'] as Map<String, dynamic>,
-            )
+      system: systemRaw is Map<String, dynamic>
+          ? PushCategoryConfig.fromJson(systemRaw)
           : const PushCategoryConfig(
               enabled: true,
               description: 'Thông báo hệ thống',
@@ -122,14 +119,14 @@ class PushSettings {
   }
 
   Map<String, dynamic> toJson() => {
-    'push_enabled': pushEnabled ? 'true' : 'false',
+    'push_enabled': pushEnabled,
     'categories': {
-      'social': social.toJson(),
-      'academic': academic.toJson(),
-      'system': system.toJson(),
+      'SOCIAL': social.toJson(),
+      'ACADEMIC': academic.toJson(),
+      'SYSTEM': system.toJson(),
     },
-    'sound_enabled': soundEnabled ? 'true' : 'false',
-    'vibration_enabled': vibrationEnabled ? 'true' : 'false',
+    'sound_enabled': soundEnabled,
+    'vibration_enabled': vibrationEnabled,
     'sound_type': soundType,
   };
 }

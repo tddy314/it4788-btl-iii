@@ -38,7 +38,10 @@ class ConversationItem {
     partnerId: partnerId,
   );
 
-  factory ConversationItem.fromJson(Map<String, dynamic> json) {
+  factory ConversationItem.fromJson(
+    Map<String, dynamic> json, {
+    String? currentUserId,
+  }) {
     final lastMsg = json['last_message'] as Map<String, dynamic>?;
     final unreadRaw = json['unread_count'];
     final unread = unreadRaw is num
@@ -50,16 +53,46 @@ class ConversationItem {
       return DateTime.tryParse(raw.toString());
     }
 
+    String? resolvedName =
+        (json['display_name'] as String?) ?? (json['name'] as String?);
+    String? resolvedAvatar =
+        (json['display_avatar_url'] as String?) ??
+        (json['avatar_url'] as String?);
+    String? resolvedPartnerId = json['partner_id']?.toString();
+
+    // Khi gọi POST /conversations/direct, server trả ConversationDetailDto kèm members
+    final members = json['members'];
+    if (members is List && members.isNotEmpty) {
+      Map<String, dynamic>? partner;
+      for (final m in members) {
+        if (m is Map<String, dynamic>) {
+          final uid = m['user_id']?.toString();
+          if (currentUserId == null || uid != currentUserId) {
+            partner = m;
+            break;
+          }
+        }
+      }
+      partner ??= members.whereType<Map<String, dynamic>>().firstOrNull;
+      if (partner != null) {
+        resolvedName ??= partner['full_name'] as String?;
+        resolvedAvatar ??= partner['avatar_url'] as String?;
+        resolvedPartnerId ??= partner['user_id']?.toString();
+      }
+    }
+
     return ConversationItem(
       conversationId: json['conversation_id']?.toString() ?? '',
       type: json['type'] as String? ?? 'DIRECT',
-      displayName: json['display_name'] as String? ?? 'Cuộc trò chuyện',
-      displayAvatarUrl: json['display_avatar_url'] as String?,
+      displayName: (resolvedName != null && resolvedName.isNotEmpty)
+          ? resolvedName
+          : 'Cuộc trò chuyện',
+      displayAvatarUrl: resolvedAvatar,
       lastMessageContent: lastMsg?['content'] as String?,
       lastMessageId: lastMsg?['id']?.toString(),
       unreadCount: unread,
       updatedAt: parseDate(json['updated_at'] ?? lastMsg?['created_at']),
-      partnerId: json['partner_id']?.toString(),
+      partnerId: resolvedPartnerId,
     );
   }
 
@@ -108,7 +141,7 @@ class ConversationListResponse {
 
     return ConversationListResponse(
       items: list,
-      after: pagination?['after'] as String?,
+      after: pagination?['after']?.toString(),
       hasNext: pagination?['has_next'] as bool? ?? false,
     );
   }

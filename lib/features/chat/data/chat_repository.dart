@@ -49,12 +49,19 @@ class ChatRepository {
   }
 
   // 2. Mở hoặc tạo cuộc trò chuyện 1-1
-  Future<ConversationItem> createDirectConversation(String targetUserId) async {
+  Future<ConversationItem> createDirectConversation(
+    String targetUserId, {
+    String? currentUserId,
+  }) async {
+    final parsedId = int.tryParse(targetUserId.trim());
     return api.request(
       'conversations/direct',
       method: 'POST',
-      data: {'target_user_id': targetUserId},
-      decode: (data) => ConversationItem.fromJson(data as Map<String, dynamic>),
+      data: {'target_user_id': parsedId ?? targetUserId.trim()},
+      decode: (data) => ConversationItem.fromJson(
+        data as Map<String, dynamic>,
+        currentUserId: currentUserId,
+      ),
     );
   }
 

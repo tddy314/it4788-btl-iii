@@ -13,6 +13,7 @@
 - **Quản lý phiên:** Khi còn phiên đăng nhập, mất mạng không đồng nghĩa với đăng xuất; có thể xem nội dung đã lưu trên máy.
 - **Luồng chính:** Đăng nhập → Chọn môn đang học → Soạn/nộp bộ câu hỏi → Theo dõi đề xuất; bổ sung các tính năng xã hội theo công việc được phân công.
 - **Giới hạn nghiệp vụ:** Chỉ triển khai tính năng được giao. Không tự mở rộng sang minigame, AI, chat nhóm, duyệt câu hỏi hay sinh đề cho giảng viên.
+- **Phạm vi hồ sơ và bạn bè:** Chỉ giữ tìm người trong tab Bạn bè (`GET search?type=USER`) để mở hồ sơ/gửi lời mời; không triển khai module tìm kiếm toàn cục, tìm bài viết, lịch sử hay từ khóa thịnh hành.
 
 ---
 
@@ -77,16 +78,13 @@
 
 ---
 
-## 3. Hiện trạng codebase — Cập nhật tháng 11/2026
+## 3. Hiện trạng codebase — Cập nhật 12/11/2026
 
-- **Hạ tầng cốt lõi (Core/App):** Đã hoàn thiện xác thực tài khoản và khung ứng dụng qua `AuthApplication`. Màn đăng nhập kết nối API server thật, lưu phiên bảo mật, cơ chế refresh token tự động, đăng xuất cục bộ/server và đổi mật khẩu.
-- **Thành công nghiệp vụ:** Đã sửa mã thành công mặc định trong `AppConfig` thành **`1000`** (khớp với response thật của backend, thay vì `0000` như ví dụ Swagger cũ).
-- **Điểm gắn kết (Composition):** `AuthApplication` hỗ trợ tham số `tabBuilders` và `protectedRoutes` để các nhánh feature gắn màn hình mà không cần sửa code auth hay core.
-- **Cấu hình Android:** `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache do project ở ổ D: và Pub cache ở ổ C:. NDK 28, Android SDK Platform 35/36, CMake 3.22.1.
-- **Nhánh `feat5`:** Đã triển khai hoàn thiện và độc lập toàn bộ các module:
-  - `lib/features/notifications/` (Tab thông báo, Controller, Repository, Deep link).
-  - `lib/features/chat/` (Conversations, Chat detail, STOMP WSS client, Emote converter, Draft store).
-  - `lib/features/settings/` (Push Settings screen, Model, Repository, Tùy chọn âm thanh theo Slide 26/29).
+- **Mục 1 (`features/auth`, `features/settings`):** Đã có màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai. Đã sửa mã thành công mặc định trong `AppConfig` thành **`1000`** theo response server thật. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:.
+- **Mục 4 (`features/profile`, `features/relationships` — cập nhật 04/11):** Đã nối tab Cá nhân (`ProfileScreen`) và tab Bạn bè (`RelationshipsScreen`, `FriendFinderScreen` tìm người qua `GET search?type=USER`), có danh sách chặn, `SocialChanges`/`SocialLease` vô hiệu dữ liệu khi quan hệ thay đổi, route `ProfileRoutes.user` (`/profile/user`). Xem [bàn giao hồ sơ và quan hệ](docs/module-ho-so-quan-he.md).
+- **Mục 3 (`features/question_bank` — cập nhật 10/11):** Đã nối `AppTab.questionBank` (`QuestionBankTab`) và `QuestionBankRoutes.routes` (`/question-bank/compose`, `/question-bank/submission`, `/question-bank/practice`, `/question-bank/ratings`). Xem [bàn giao mục 3](docs/muc-3-question-bank.md).
+- **Mục 5 (`features/notifications`, `features/chat`, `features/settings` trên nhánh `feat5`):** Đã nối `AppTab.notifications` (`NotificationsTab`), `/conversations` (`ConversationsScreen`), `/chat` (`ChatDetailScreen`), `SettingsRoutes.pushSettings` (`/settings/push`), cùng GitHub Actions workflow build APK debug. Đã đối chiếu OpenAPI trực tiếp ngày 12/11/2026.
+- **Chưa có:** `features/feed`, `features/posts` (chờ thành viên 2 merge).
 
 ---
 
@@ -96,7 +94,7 @@
 | --- | --- |
 | `lib/main.dart` | `AppBootstrap`: khởi tạo dependency, loading/thử lại khi lỗi, gọi `AuthApplication` |
 | `lib/app/app.dart` | `SqbApp`: locale vi, lifecycle, điểm gắn màn hình qua router và shell |
-| `lib/app/app_dependencies.dart`, `app_scope.dart` | `AppDependencies`, `AppScope.of(context)` cung cấp service dùng chung |
+| `lib/app/app_dependencies.dart`, `app_scope.dart` | `AppDependencies`, `AppScope.of(context)` cung cấp service dùng chung (`mediaUpload`, `api`, `cache`, `drafts`, `session`, `connection`) |
 | `lib/app/router/app_router.dart` | `AppRoutes`, `AppRouter`: bảo vệ route bằng phiên, màn chưa tìm thấy |
 | `lib/app/app_shell.dart` | `AppShell`, `AppTab`: feed, questionBank, friends, notifications, profile |
 | `lib/app/theme/` | `AppColors`, `AppTheme`: màu tập trung, theme Material 3 tiếng Việt |
@@ -104,16 +102,16 @@
 | `lib/core/network/api_client.dart` | `ApiClient`: get/request, Bearer token, envelope, lỗi, cancel/progress, điểm nối refresh token |
 | `lib/core/network/connection_monitor.dart` | `ConnectionMonitor`, `DeviceConnectionMonitor`, `ConnectionStatus`: unknown/offline/available |
 | `lib/core/errors/app_failure.dart` | `AppFailure`, `FailureKind`, `canUseCache`: lỗi thống nhất để UI xử lý |
-| `lib/core/storage/key_value_store.dart` | `KeyValueStore`, secure storage và preferences adapters |
-| `lib/core/storage/session_store.dart` | `SessionStore`, `SessionTokens`: restore/save/clear phiên, lưu token bảo mật |
-| `lib/core/storage/json_cache.dart` | `JsonCache`, `CacheEntry`: cache nhỏ theo user/resource, có thời điểm lưu |
-| `lib/core/storage/cached_resource_controller.dart` | `CachedResourceController<T>`: cache-first, giữ dữ liệu khi lỗi mạng, chặn load trùng |
-| `lib/core/storage/draft_store.dart` | `DraftStore`: bản nháp JSON theo user/name, dùng secure storage |
+| `lib/core/storage/` | `KeyValueStore`, `SessionStore`, `JsonCache`, `CachedResourceController<T>`, `DraftStore` |
 | `lib/core/media/media_upload_service.dart` | `MediaUploadService`, `MediaPurpose`, `UploadedMedia`: upload multipart, kiểm tra dung lượng, progress/cancel |
 | `lib/core/widgets/` | `AppButton`, `AppTextField`, loading/empty/error, `ConnectionBanner`, `AppNetworkImage`, `AppAvatar`, `CachedResourceView<T>` |
 | `lib/core/validation/validators.dart` | `Validators`: bắt buộc, đếm từ, giới hạn số từ |
 | `lib/features/auth/` | `AuthApplication`, `AuthController`, `AuthRepository`, `DeviceIdentity`, `LoginScreen` |
+| `lib/features/profile/`, `relationships/` | `ProfileScreen`, `ProfileRoutes.user`, `RelationshipsScreen`, `FriendFinderScreen`, `SocialChanges` |
+| `lib/features/question_bank/` | `QuestionBankTab`, `QuestionBankRoutes` |
 | `lib/features/settings/` | `SettingsScreen`, `SettingsRoutes`, `ChangePasswordScreen`, `PushSettingsScreen` |
+
+Dependencies đã có trong `pubspec.yaml`: Flutter localizations, `dio`, `flutter_secure_storage`, `shared_preferences`, `connectivity_plus`, `cached_network_image`, `image_picker`, `path_provider`.
 
 ---
 
@@ -126,7 +124,7 @@
   - Sử dụng chung thuật ngữ tiếng Việt: "Đang gửi…", "Thử lại", "Đã gửi", "Đã xem", "Không có kết nối mạng".
   - Các trạng thái phải dùng widget chuẩn: `AppLoadingState`, `AppEmptyState`, `AppErrorState`, `ConnectionBanner`.
 - **Cache & Bản nháp:**
-  - `JsonCache`: Lưu trữ danh sách thông báo, danh sách hội thoại, lịch sử tin nhắn cục bộ theo `userId`. Giới hạn số lượng bản ghi (không cache vô hạn gây tràn bộ nhớ).
+  - `JsonCache`: Lưu trữ dữ liệu cục bộ theo `userId` (giới hạn 512 KiB/record, tối đa 30–50 bản ghi).
   - `DraftStore`: Lưu văn bản đang gõ dở vào secure storage; tự động phục hồi khi mở lại và xóa sau khi gửi thành công.
 
 ---
@@ -134,10 +132,16 @@
 ## 6. Hợp đồng nghiệp vụ & API cần nhớ
 
 - **Base URL:** `https://snsqb.duckdns.org/api/v1/`
-- **Mã thành công chuẩn:** **`1000`** (chú ý: Swagger ghi `0000` là sai lệch so với server thật).
+- **Mã thành công chuẩn:** **`1000`** (Swagger minh họa `0000` không khớp server thật).
 - **Header bắt buộc:** `Authorization: Bearer <access_token>` (trừ login/refresh).
+- **Kiểu dữ liệu theo OpenAPI thực tế (cập nhật 12/11/2026):**
+  - `CursorPaginationDto.after` và `before` là **số nguyên (`int64`)**, luôn đọc qua `?.toString()`.
+  - `CreateDirectConversationDto` gửi `target_user_id` dạng **số nguyên (`int64`)**; response `ConversationDetailDto` trả `conversation_id`, `name`, `avatar_url`, `members`.
+  - `NotificationTargetDto` dùng `target_id` (int64) và `type` enum `BADGE | SESSION | POST | QUESTION | USER | CONVERSATION`.
+  - `PushSettingsResponseDto` & `UpdatePushSettingsRequestDto` dùng **boolean** (`true`/`false`) cho `push_enabled`, `sound_enabled`, `vibration_enabled`, `categories[K].enabled`; các key category là `SOCIAL`, `ACADEMIC`, `GAMIFICATION`, `SYSTEM`.
+  - `SyncFidRequest` (`POST /devices/fid`) gửi `{"fid": "..."}`.
 - **Giới hạn bài viết & bình luận:** Tối đa 500 từ; tối đa 4 ảnh hoặc 1 video (1–10 giây, tối đa 10 MB).
-- **Đánh giá câu hỏi:** Thang điểm từ **0 đến 4** (0 là giá trị hợp lệ, không dùng truthy check để loại bỏ 0).
+- **Đánh giá câu hỏi:** Thang điểm từ **0 đến 4** (0 là giá trị hợp lệ).
 - **Không gọi API admin từ ứng dụng di động.**
 
 ---
@@ -148,71 +152,31 @@
 | :---: | :---: | :--- |
 | **1** | `main` / `feat1` | `app`, `core`, `features/auth`, ghép menu settings, cấu hình Android và tích hợp |
 | **2** | `feat2` | `features/feed`, `features/posts`; media picker/viewer và bình luận |
-| **3** | `feat3` | `features/question_bank` (đóng góp câu hỏi, theo dõi duyệt, luyện tập) |
-| **4** | `feat4` | `features/profile`, `features/relationships`, `features/search`; danh sách chặn |
+| **3** | `feat3/dat` | `features/question_bank` (đóng góp câu hỏi, theo dõi duyệt, luyện tập) |
+| **4** | `feat4` | `features/profile`, `features/relationships`; tìm người trong Bạn bè, danh sách chặn |
 | **5** | **`feat5`** | **`features/chat`, `features/notifications`; cài đặt thông báo trong settings** |
 
 ---
 
 ## 8. Hướng dẫn chi tiết cho AI Model trên nhánh feat5 (Thành viên 5)
 
-Nhánh **`feat5`** chịu trách nhiệm toàn bộ các tính năng liên quan đến **Thông báo**, **Trò chuyện 1–1 Realtime & Offline**, và **Cài đặt thông báo & Quản trị thiết bị**. Dưới đây là các yêu cầu chi tiết bắt buộc phải tuân thủ:
+Nhánh **`feat5`** chịu trách nhiệm toàn bộ các tính năng liên quan đến **Thông báo**, **Trò chuyện 1–1 Realtime & Offline**, và **Cài đặt thông báo & Quản trị thiết bị**:
 
 ### A. Hệ thống Thông báo (`lib/features/notifications`)
-1. **Giao diện & Điều hướng:**
-   - Cung cấp `NotificationsTab` gắn vào `AppTab.notifications` của `AppShell`.
-   - Hiển thị danh sách thông báo có avatar (`AppAvatar`), icon phân loại tương tác (like, comment, duyệt đề, tin nhắn, bạn bè), thời gian tương đối và chấm xanh chưa đọc.
-   - Hỗ trợ Pull-to-refresh và phân trang cuộn vô hạn (`after`, `has_next`).
-2. **Đánh dấu đã đọc:**
-   - Nhấn vào một thông báo: Optimistic update sang đã đọc, gọi `POST /notifications/{id}/read`.
-   - Nút "Đánh dấu tất cả đã đọc" trên AppBar: Gọi `POST /notifications/read-all`.
-3. **Deep Linking an toàn:**
-   - Phân tích `target.type`:
-     - `POST` → Mở chi tiết bài viết.
-     - `QUESTION_SESSION` → Mở chi tiết đề xuất câu hỏi.
-     - `CHAT` / `MESSAGE` → Mở màn hình chat chi tiết với người gửi.
-     - `FRIEND_REQUEST` / `PROFILE` → Mở trang cá nhân.
-   - **Xử lý 404/403:** Nếu đối tượng đích đã bị xóa, hiển thị SnackBar tiếng Việt: *"Nội dung này không còn tồn tại hoặc bạn không có quyền xem"*, **tuyệt đối không để ứng dụng crash**.
-4. **Offline Cache:** Đọc từ `JsonCache` theo `userId` trước; khi offline kéo làm mới phải giữ nguyên dữ liệu, không xóa trắng màn hình.
+- `NotificationsTab` gắn vào `AppTab.notifications` của `AppShell`, hỗ trợ bộ lọc (Tất cả / Chưa đọc / Ngân hàng đề), Pull-to-refresh, Infinite Scroll (`after`, `has_next`), Optimistic read (`POST /notifications/{id}/read`, `POST /notifications/read-all`).
+- `NotificationDeepLinkHandler` điều hướng tới `ChatDetailScreen`, `ProfileRoutes.user`, `QuestionBankRoutes.submission`, `/posts/detail` và bắt lỗi an toàn (không crash khi 404/403 hoặc route chưa merge).
+- Offline cache qua `JsonCache` theo `userId`.
 
 ### B. Trò chuyện 1–1 Realtime & Offline (`lib/features/chat`)
-1. **Phạm vi chat:**
-   - **Chỉ làm chat 1–1 (Direct chat)**; không làm chat nhóm theo quy định Slide 25.
-   - Màn hình danh sách cuộc trò chuyện: `ConversationsScreen` (route `'/conversations'`), tải qua `GET /conversations`.
-   - Tạo/mở chat 1–1: `POST /conversations/direct` với `{ "target_user_id": id }`.
-2. **Màn hình hội thoại & Tin nhắn:**
-   - `ChatDetailScreen` (route `'/chat'`): Lấy lịch sử qua `GET /conversations/{id}/messages`, cuộn ngược (Reverse Scroll) để tải tin cũ.
-   - Bong bóng chat: Tin của mình bên phải (`AppColors.primary`), tin đối phương bên trái.
-   - Trạng thái tin nhắn: Đang gửi (spinner) → Đã gửi (dấu tick) → Lỗi (dấu chấm than đỏ kèm nút "Thử lại").
-3. **Quy định Slide 28 của giảng viên:**
-   - **Chuyển đổi ký tự emote:** Tự động chuyển các ký tự đặc biệt (`:))` → 😆, `:)` → 😊, `<3` → ❤️, `B)` → 😎, `(y)` → 👍 thành biểu tượng tương ứng qua `ChatEmoteConverter`.
-   - **Không cho phép tag:** Tuyệt đối không mở danh sách tag `@username` trong khung chat.
-4. **Gửi ảnh trong Chat:**
-   - Nút đính kèm ảnh: Tải lên qua `MediaUploadService` với `purpose=CHAT`, giới hạn tối đa 4 MB.
-   - Hiển thị ảnh bằng `AppNetworkImage`, nhấn vào để xem toàn màn hình.
-5. **Realtime STOMP WebSocket:**
-   - Kết nối WSS: `wss://snsqb.duckdns.org/api/v1/ws` (Header: `Authorization: Bearer <token>`).
-   - Lắng nghe tin nhắn mới: `/user/queue/messages`.
-   - Lắng nghe đang gõ (Typing): `/topic/conv.{id}.typing` (tự tắt sau 3.5 giây).
-   - Gửi tin nhắn: `SEND /app/chat.send`.
-   - Gửi đã đọc: `SEND /app/chat.read`.
-   - Gửi typing: `SEND /app/chat.typing`.
-6. **Bản nháp & Chống gửi trùng lặp:**
-   - Lưu nội dung đang gõ dở vào `DraftStore` theo `userId` và `conversationId`.
-   - Gán `client_msg_id` duy nhất cho mỗi tin nhắn; khi thử lại do lỗi mạng thì giữ nguyên ID này để chống server duplicate tin nhắn.
+- Chỉ làm **chat 1–1 (Direct chat)**, không làm chat nhóm; không hỗ trợ tag `@username`.
+- `ConversationsScreen` (`/conversations`): `GET /conversations`, tạo chat 1–1 `POST /conversations/direct`, tìm kiếm nhanh, cache offline.
+- `ChatDetailScreen` (`/chat`): `GET /conversations/{id}/messages`, Reverse scroll, bong bóng chat, trạng thái Đang gửi / Đã gửi / Lỗi thử lại, xem ảnh toàn màn hình phóng to (`InteractiveViewer`), cảnh báo khi bị chặn, upload ảnh qua `deps.mediaUpload` (`MediaPurpose.chat`, $\le 4\text{MB}$).
+- STOMP WebSocket WSS (`wss://snsqb.duckdns.org/api/v1/ws`): subscribe `/user/queue/messages`, `/topic/conv.{id}.typing`; send `/app/chat.send`, `/app/chat.read`, `/app/chat.typing`.
+- `ChatEmoteConverter`: chuyển đổi ký tự emote (bao gồm `<(")` → 🐧, `(^^^)` → 🦈, `:))` → 😆, `:)` → 😊, `<3` → ❤️, v.v.).
+- Lưu nháp qua `DraftStore`, chống duplicate/replay bằng `client_msg_id`.
 
 ### C. Cài đặt Thông báo & Thiết bị (`lib/features/settings`)
-1. **Giao diện & Cấu hình:**
-   - `PushSettingsScreen` (route `SettingsRoutes.pushSettings = '/settings/push'`).
-   - Tích hợp `GET /settings/push` và `PUT /settings/push`.
-   - Công tắc Master bật/tắt toàn bộ push; công tắc từng danh mục: Mạng xã hội, Ngân hàng đề, Hệ thống; bật/tắt Rung & Chuông.
-2. **Yêu cầu riêng Slide 26 & 29 của giảng viên môn IT4788:**
-   - Tùy chọn kiểu âm thanh push notification:
-     - *"Âm thanh mặc định"* (tiếng chuông hệ thống ngân vang).
-     - *"Giọng nói phát ra (File thu âm giọng nói của nhóm sinh viên)"*.
-3. **Quản trị Thiết bị (Device FID / FCM):**
-   - Đăng ký thiết bị khi login: `POST /devices/register` (hoặc `/devices/fid`).
-   - Hủy đăng ký khi logout: `DELETE /devices/register` (hoặc `/devices/fid/unregister`).
+- `PushSettingsScreen` (`SettingsRoutes.pushSettings = '/settings/push'`): `GET /settings/push`, `PUT /settings/push`, công tắc chuyên mục (`SOCIAL`, `ACADEMIC`, `SYSTEM`), rung/chuông, tùy chọn kiểu âm thanh mặc định hoặc giọng nói thu âm (Slide 26 & 29), đăng ký/hủy thiết bị (`POST /devices/fid`, `POST /devices/fid/unregister`).
 
 ---
 
@@ -225,6 +189,5 @@ flutter analyze --no-pub
 flutter test --no-pub
 ```
 
-- Chạy kiểm tra phù hợp với phần đã thay đổi.
 - Không đưa password/token vào source code, log, fixture, dart-define hoặc Git.
-- Bàn giao phải nêu rõ: những gì đã làm, thành phần tái sử dụng, kiểm thử đã chạy và các điểm cần lưu ý khi merge.
+- Nếu cần build APK trên máy có ít RAM, sử dụng GitHub Actions workflow `.github/workflows/build-apk.yml` hoặc tạm giảm `org.gradle.jvmargs` khi build local (không commit đè file cấu hình chung nếu không được giao).

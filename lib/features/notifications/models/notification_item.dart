@@ -37,7 +37,7 @@ class NotificationTarget {
   factory NotificationTarget.fromJson(Map<String, dynamic> json) =>
       NotificationTarget(
         type: json['type'] as String? ?? '',
-        id: json['id']?.toString() ?? '',
+        id: json['target_id']?.toString() ?? json['id']?.toString() ?? '',
         url: json['url'] as String?,
       );
 
@@ -154,7 +154,7 @@ class NotificationListResponse {
     return NotificationListResponse(
       items: itemsList,
       unreadCount: unread,
-      after: pagination?['after'] as String?,
+      after: pagination?['after']?.toString(),
       hasNext: pagination?['has_next'] as bool? ?? false,
     );
   }

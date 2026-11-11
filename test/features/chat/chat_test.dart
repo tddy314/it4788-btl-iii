@@ -75,6 +75,39 @@ void main() {
       expect(conv.lastMessageContent, 'Hẹn gặp ở thư viện');
       expect(conv.unreadCount, 3);
     });
+
+    test(
+      'ConversationItem parses POST /conversations/direct members & int IDs',
+      () {
+        final json = {
+          'conversation_id': 42,
+          'type': 'DIRECT',
+          'name': null,
+          'avatar_url': null,
+          'members': [
+            {'user_id': 1, 'full_name': 'Tôi', 'avatar_url': null},
+            {
+              'user_id': 5,
+              'full_name': 'Trần Thị C',
+              'avatar_url': 'https://example.com/c.jpg',
+            },
+          ],
+        };
+
+        final conv = ConversationItem.fromJson(json, currentUserId: '1');
+        expect(conv.conversationId, '42');
+        expect(conv.displayName, 'Trần Thị C');
+        expect(conv.displayAvatarUrl, 'https://example.com/c.jpg');
+        expect(conv.partnerId, '5');
+
+        final listResp = ConversationListResponse.fromJson({
+          'items': [json],
+          'pagination': {'after': 1728200000000, 'has_next': true},
+        });
+        expect(listResp.after, '1728200000000');
+        expect(listResp.hasNext, isTrue);
+      },
+    );
   });
 
   group('STOMP Frame Serializer & Parser', () {

@@ -151,7 +151,7 @@ class ChatMessagesResponse {
     return ChatMessagesResponse(
       conversationId: convId,
       messages: list,
-      after: pagination?['after'] as String?,
+      after: pagination?['after']?.toString(),
       hasNext: pagination?['has_next'] as bool? ?? false,
     );
   }
