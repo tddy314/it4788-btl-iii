@@ -48,9 +48,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
       if (snapshot.hasData) {
         return AuthApplication(
           dependencies: snapshot.requireData,
-          tabBuilders: {
-            AppTab.notifications: (_) => const NotificationsTab(),
-          },
+          tabBuilders: {AppTab.notifications: (_) => const NotificationsTab()},
           protectedRoutes: {
             '/conversations': (_) => const ConversationsScreen(),
             '/chat': (_) => const ChatDetailScreen(),

@@ -75,8 +75,7 @@ class SqbStompClient {
   StompConnectionState get state => _state;
   bool get isConnected => _state == StompConnectionState.connected;
 
-  final _stateController =
-      StreamController<StompConnectionState>.broadcast();
+  final _stateController = StreamController<StompConnectionState>.broadcast();
   Stream<StompConnectionState> get stateStream => _stateController.stream;
 
   Future<void> connect() async {
@@ -97,9 +96,8 @@ class SqbStompClient {
 
       // Khởi tạo WebSocket kết nối bảo mật WSS
       final uri = Uri.parse(url);
-      _socket = await WebSocket.connect(
-        uri.toString(),
-      ).timeout(const Duration(seconds: 10));
+      _socket = await WebSocket.connect(uri.toString())
+          .timeout(const Duration(seconds: 10));
 
       _socket!.listen(
         _onData,

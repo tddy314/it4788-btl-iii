@@ -102,14 +102,18 @@ class _NotificationsTabState extends State<NotificationsTab> {
               // Thanh lọc danh mục thông báo
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     FilterChip(
                       label: const Text('Tất cả'),
                       selected: _selectedFilter == NotificationFilter.all,
-                      onSelected: (_) =>
-                          setState(() => _selectedFilter = NotificationFilter.all),
+                      onSelected: (_) => setState(
+                        () => _selectedFilter = NotificationFilter.all,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
@@ -171,8 +175,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
         NotificationFilter.unread => 'Không có thông báo chưa đọc nào.',
         NotificationFilter.academic =>
           'Chưa có thông báo liên quan đến ngân hàng câu hỏi.',
-        NotificationFilter.all =>
-          'Bạn sẽ nhận được thông báo khi có bạn bè tương tác hoặc kết quả duyệt câu hỏi.',
+        NotificationFilter.all => 'Bạn sẽ nhận được thông báo khi có bạn bè tương tác hoặc kết quả duyệt câu hỏi.',
       };
       return AppEmptyState(
         icon: Icons.notifications_none_outlined,
@@ -187,7 +190,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: displayItems.length + (controller.hasNext ? 1 : 0),
-        separatorBuilder: (_, __) => const Divider(height: 1, thickness: 0.5),
+        separatorBuilder: (_, _) => const Divider(height: 1, thickness: 0.5),
         itemBuilder: (context, index) {
           if (index == displayItems.length) {
             return const Padding(

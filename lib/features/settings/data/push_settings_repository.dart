@@ -3,31 +3,25 @@ import '../../../core/storage/json_cache.dart';
 import '../models/push_settings.dart';
 
 class PushSettingsRepository {
-  PushSettingsRepository({
-    required ApiClient api,
-    required JsonCache cache,
-  }) : _api = api,
-       _cache = cache;
+  PushSettingsRepository({required this.api, required this.cache});
 
-  final ApiClient _api;
-  final JsonCache _cache;
+  final ApiClient api;
+  final JsonCache cache;
   static const _cacheResource = 'push_settings';
 
   Future<PushSettings> fetchSettings() async {
-    return _api.get(
+    return api.get(
       'settings/push',
-      decode: (data) =>
-          PushSettings.fromJson(data as Map<String, dynamic>),
+      decode: (data) => PushSettings.fromJson(data as Map<String, dynamic>),
     );
   }
 
   Future<PushSettings> updateSettings(PushSettings settings) async {
-    return _api.request(
+    return api.request(
       'settings/push',
       method: 'PUT',
       data: settings.toJson(),
-      decode: (data) =>
-          PushSettings.fromJson(data as Map<String, dynamic>),
+      decode: (data) => PushSettings.fromJson(data as Map<String, dynamic>),
     );
   }
 
@@ -35,7 +29,7 @@ class PushSettingsRepository {
     required String fcmToken,
     required String deviceName,
   }) async {
-    await _api.request(
+    await api.request(
       'devices/register',
       method: 'POST',
       data: {
@@ -49,7 +43,7 @@ class PushSettingsRepository {
   }
 
   Future<void> unregisterDevice(String fcmToken) async {
-    await _api.request(
+    await api.request(
       'devices/register',
       method: 'DELETE',
       data: {'fcm_token': fcmToken},
@@ -58,7 +52,7 @@ class PushSettingsRepository {
   }
 
   Future<PushSettings?> loadCached(String userId) async {
-    final entry = await _cache.read(userId: userId, resource: _cacheResource);
+    final entry = await cache.read(userId: userId, resource: _cacheResource);
     if (entry == null || entry.data == null) return null;
     try {
       return PushSettings.fromJson(entry.data as Map<String, dynamic>);
@@ -68,7 +62,7 @@ class PushSettingsRepository {
   }
 
   Future<void> saveToCache(String userId, PushSettings settings) async {
-    await _cache.write(
+    await cache.write(
       userId: userId,
       resource: _cacheResource,
       data: settings.toJson(),

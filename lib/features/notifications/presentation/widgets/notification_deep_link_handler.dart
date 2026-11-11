@@ -14,15 +14,13 @@ class NotificationDeepLinkHandler {
         case 'CHAT':
         case 'MESSAGE':
         case 'CONVERSATION':
-          Navigator.of(
-            context,
-          ).pushNamed('/chat', arguments: {'conversationId': target.id});
+          Navigator.of(context)
+              .pushNamed('/chat', arguments: {'conversationId': target.id});
           break;
 
         case 'POST':
-          Navigator.of(
-            context,
-          ).pushNamed('/posts/detail', arguments: {'postId': target.id});
+          Navigator.of(context)
+              .pushNamed('/posts/detail', arguments: {'postId': target.id});
           break;
 
         case 'QUESTION_SESSION':
@@ -36,9 +34,8 @@ class NotificationDeepLinkHandler {
         case 'FRIEND_REQUEST':
         case 'PROFILE':
         case 'USER':
-          Navigator.of(
-            context,
-          ).pushNamed('/users/profile', arguments: {'userId': target.id});
+          Navigator.of(context)
+              .pushNamed('/users/profile', arguments: {'userId': target.id});
           break;
 
         default:

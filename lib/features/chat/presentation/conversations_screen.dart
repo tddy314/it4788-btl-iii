@@ -32,7 +32,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       final repository = ChatRepository(
         api: deps.api,
         cache: deps.cache,
-        mediaUploadService: deps.media,
+        mediaUploadService: deps.mediaUpload,
       );
 
       _controller = ConversationsController(
@@ -95,7 +95,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   final repo = ChatRepository(
                     api: deps.api,
                     cache: deps.cache,
-                    mediaUploadService: deps.media,
+                    mediaUploadService: deps.mediaUpload,
                   );
                   final conv = await repo.createDirectConversation(targetId);
                   if (context.mounted) {
@@ -112,7 +112,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Không thể tạo cuộc trò chuyện với người này.'),
+                        content: Text(
+                          'Không thể tạo cuộc trò chuyện với người này.',
+                        ),
                       ),
                     );
                   }
@@ -131,7 +133,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     final controller = _controller;
     if (controller == null) {
       return const Scaffold(
-        body: SafeArea(child: AppLoadingState(message: 'Đang mở danh sách đoạn chat…')),
+        body: SafeArea(
+          child: AppLoadingState(message: 'Đang mở danh sách đoạn chat…'),
+        ),
       );
     }
 
@@ -142,11 +146,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       builder: (context, _) {
         final filteredItems = _searchQuery.isEmpty
             ? controller.items
-            : controller.items.where(
-                (item) => item.displayName.toLowerCase().contains(
+            : controller.items
+                  .where(
+                    (item) => item.displayName.toLowerCase().contains(
                       _searchQuery.toLowerCase(),
                     ),
-              ).toList();
+                  )
+                  .toList();
 
         return Scaffold(
           appBar: AppBar(
@@ -163,7 +169,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             children: [
               // Thanh tìm kiếm nhanh cuộc trò chuyện
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: TextField(
                   controller: _searchController,
                   onChanged: (val) => setState(() => _searchQuery = val),
@@ -219,7 +228,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       return const AppEmptyState(
         icon: Icons.chat_bubble_outline_rounded,
         title: 'Chưa có tin nhắn',
-        message: 'Hãy bắt đầu trò chuyện với bạn bè để cùng ôn luyện ngân hàng đề.',
+        message:
+            'Hãy bắt đầu trò chuyện với bạn bè để cùng ôn luyện ngân hàng đề.',
       );
     }
 
@@ -229,7 +239,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: items.length + (controller.hasNext ? 1 : 0),
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+        separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
         itemBuilder: (context, index) {
           if (index == items.length) {
             return const Padding(
@@ -273,7 +283,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             ),
             trailing: hasUnread
                 ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary,
                       borderRadius: BorderRadius.circular(12),

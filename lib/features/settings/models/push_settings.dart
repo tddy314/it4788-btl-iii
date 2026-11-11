@@ -1,8 +1,5 @@
 class PushCategoryConfig {
-  const PushCategoryConfig({
-    required this.enabled,
-    this.description = '',
-  });
+  const PushCategoryConfig({required this.enabled, this.description = ''});
 
   final bool enabled;
   final String description;
@@ -15,8 +12,8 @@ class PushCategoryConfig {
 
   factory PushCategoryConfig.fromJson(Map<String, dynamic> json) {
     final enabledVal = json['enabled'];
-    final isEnabled = enabledVal == true ||
-        enabledVal?.toString().toLowerCase() == 'true';
+    final isEnabled =
+        enabledVal == true || enabledVal?.toString().toLowerCase() == 'true';
     return PushCategoryConfig(
       enabled: isEnabled,
       description: json['description'] as String? ?? '',
@@ -37,7 +34,8 @@ class PushSettings {
     required this.system,
     required this.soundEnabled,
     required this.vibrationEnabled,
-    this.soundType = 'default', // 'default' hoặc 'voice' theo yêu cầu Slide 26 & 29
+    this.soundType =
+        'default', // 'default' hoặc 'voice' theo yêu cầu Slide 26 & 29
   });
 
   final bool pushEnabled;
@@ -56,25 +54,30 @@ class PushSettings {
     bool? soundEnabled,
     bool? vibrationEnabled,
     String? soundType,
-  }) =>
-      PushSettings(
-        pushEnabled: pushEnabled ?? this.pushEnabled,
-        social: social ?? this.social,
-        academic: academic ?? this.academic,
-        system: system ?? this.system,
-        soundEnabled: soundEnabled ?? this.soundEnabled,
-        vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
-        soundType: soundType ?? this.soundType,
-      );
+  }) => PushSettings(
+    pushEnabled: pushEnabled ?? this.pushEnabled,
+    social: social ?? this.social,
+    academic: academic ?? this.academic,
+    system: system ?? this.system,
+    soundEnabled: soundEnabled ?? this.soundEnabled,
+    vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
+    soundType: soundType ?? this.soundType,
+  );
 
   factory PushSettings.defaults() => const PushSettings(
     pushEnabled: true,
-    social: PushCategoryConfig(enabled: true, description: 'Mạng xã hội & Tin nhắn'),
+    social: PushCategoryConfig(
+      enabled: true,
+      description: 'Mạng xã hội & Tin nhắn',
+    ),
     academic: PushCategoryConfig(
       enabled: true,
       description: 'Ngân hàng câu hỏi & Đề xuất',
     ),
-    system: PushCategoryConfig(enabled: true, description: 'Thông báo hệ thống'),
+    system: PushCategoryConfig(
+      enabled: true,
+      description: 'Thông báo hệ thống',
+    ),
     soundEnabled: true,
     vibrationEnabled: true,
     soundType: 'default',
@@ -89,19 +92,25 @@ class PushSettings {
     return PushSettings(
       pushEnabled: parseBool(json['push_enabled'] ?? true),
       social: categories['social'] is Map<String, dynamic>
-          ? PushCategoryConfig.fromJson(categories['social'] as Map<String, dynamic>)
+          ? PushCategoryConfig.fromJson(
+              categories['social'] as Map<String, dynamic>,
+            )
           : const PushCategoryConfig(
               enabled: true,
               description: 'Mạng xã hội & Tin nhắn',
             ),
       academic: categories['academic'] is Map<String, dynamic>
-          ? PushCategoryConfig.fromJson(categories['academic'] as Map<String, dynamic>)
+          ? PushCategoryConfig.fromJson(
+              categories['academic'] as Map<String, dynamic>,
+            )
           : const PushCategoryConfig(
               enabled: true,
               description: 'Ngân hàng câu hỏi & Đề xuất',
             ),
       system: categories['system'] is Map<String, dynamic>
-          ? PushCategoryConfig.fromJson(categories['system'] as Map<String, dynamic>)
+          ? PushCategoryConfig.fromJson(
+              categories['system'] as Map<String, dynamic>,
+            )
           : const PushCategoryConfig(
               enabled: true,
               description: 'Thông báo hệ thống',

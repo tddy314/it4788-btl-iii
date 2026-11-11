@@ -20,11 +20,7 @@ void main() {
           'full_name': 'Nguyễn Văn A',
           'avatar_url': 'https://example.com/avatar.jpg',
         },
-        'target': {
-          'type': 'POST',
-          'id': 'post_789',
-          'url': '/posts/detail',
-        },
+        'target': {'type': 'POST', 'id': 'post_789', 'url': '/posts/detail'},
       };
 
       final item = NotificationItem.fromJson(json);
@@ -79,10 +75,7 @@ void main() {
         body: 'Hệ thống sẽ cập nhật lúc 00:00.',
         createdAt: DateTime.now(),
       );
-      final response = NotificationListResponse(
-        items: [item],
-        unreadCount: 1,
-      );
+      final response = NotificationListResponse(items: [item], unreadCount: 1);
 
       await cache.write(
         userId: userId,

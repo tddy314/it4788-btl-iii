@@ -3,12 +3,10 @@ import '../../../core/storage/json_cache.dart';
 import '../models/notification_item.dart';
 
 class NotificationRepository {
-  NotificationRepository({required ApiClient api, required JsonCache cache})
-    : _api = api,
-      _cache = cache;
+  NotificationRepository({required this.api, required this.cache});
 
-  final ApiClient _api;
-  final JsonCache _cache;
+  final ApiClient api;
+  final JsonCache cache;
   static const _cacheResource = 'notifications';
 
   Future<NotificationListResponse> fetchNotifications({
@@ -20,7 +18,7 @@ class NotificationRepository {
       if (after != null && after.isNotEmpty) 'after': after,
     };
 
-    return _api.get(
+    return api.get(
       'notifications',
       query: query,
       decode: NotificationListResponse.fromJson,
@@ -28,7 +26,7 @@ class NotificationRepository {
   }
 
   Future<void> markAsRead(String notificationId) async {
-    await _api.request(
+    await api.request(
       'notifications/$notificationId/read',
       method: 'POST',
       decode: (_) => null,
@@ -36,7 +34,7 @@ class NotificationRepository {
   }
 
   Future<void> markAllAsRead() async {
-    await _api.request(
+    await api.request(
       'notifications/read-all',
       method: 'POST',
       decode: (_) => null,
@@ -44,7 +42,7 @@ class NotificationRepository {
   }
 
   Future<NotificationListResponse?> loadCached(String userId) async {
-    final entry = await _cache.read(userId: userId, resource: _cacheResource);
+    final entry = await cache.read(userId: userId, resource: _cacheResource);
     if (entry == null || entry.data == null) return null;
     try {
       return NotificationListResponse.fromJson(entry.data);
@@ -66,7 +64,7 @@ class NotificationRepository {
       hasNext: response.hasNext,
     ).toJson();
 
-    await _cache.write(
+    await cache.write(
       userId: userId,
       resource: _cacheResource,
       data: cachePayload,

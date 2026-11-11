@@ -68,7 +68,8 @@ class SettingsScreen extends StatelessWidget {
                   trailing: const Icon(Icons.chevron_right),
                   enabled: !auth.busy,
                   onTap: () =>
-                      Navigator.of(context).pushNamed(SettingsRoutes.pushSettings),
+                      Navigator.of(context)
+                          .pushNamed(SettingsRoutes.pushSettings),
                 ),
                 const Divider(height: 1),
                 ListTile(

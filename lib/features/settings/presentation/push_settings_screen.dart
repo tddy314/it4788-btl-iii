@@ -151,7 +151,9 @@ class _PushSettingsScreenState extends State<PushSettingsScreen> {
                   ),
                   SwitchListTile(
                     title: const Text('Hệ thống'),
-                    subtitle: const Text('Thông báo bảo mật và phiên đăng nhập'),
+                    subtitle: const Text(
+                      'Thông báo bảo mật và phiên đăng nhập',
+                    ),
                     value: _settings.system.enabled,
                     onChanged: (val) {
                       _update(
@@ -205,29 +207,29 @@ class _PushSettingsScreenState extends State<PushSettingsScreen> {
                         ),
                       ),
                     ),
-                    RadioListTile<String>(
-                      title: const Text('Âm thanh mặc định'),
-                      subtitle: const Text('Tiếng chuông ngân vang hệ thống'),
-                      value: 'default',
+                    RadioGroup<String>(
                       groupValue: _settings.soundType,
                       onChanged: (val) {
                         if (val != null) {
                           _update(_settings.copyWith(soundType: val));
                         }
                       },
-                    ),
-                    RadioListTile<String>(
-                      title: const Text('Giọng nói phát ra (Thu âm đặc trưng)'),
-                      subtitle: const Text(
-                        'Phát file âm thanh giọng nói của nhóm sinh viên',
+                      child: const Column(
+                        children: [
+                          RadioListTile<String>(
+                            title: Text('Âm thanh mặc định'),
+                            subtitle: Text('Tiếng chuông ngân vang hệ thống'),
+                            value: 'default',
+                          ),
+                          RadioListTile<String>(
+                            title: Text('Giọng nói phát ra (Thu âm đặc trưng)'),
+                            subtitle: Text(
+                              'Phát file âm thanh giọng nói của nhóm sinh viên',
+                            ),
+                            value: 'voice',
+                          ),
+                        ],
                       ),
-                      value: 'voice',
-                      groupValue: _settings.soundType,
-                      onChanged: (val) {
-                        if (val != null) {
-                          _update(_settings.copyWith(soundType: val));
-                        }
-                      },
                     ),
                   ],
                 ],

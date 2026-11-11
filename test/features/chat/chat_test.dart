@@ -16,8 +16,14 @@ void main() {
       expect(ChatEmoteConverter.convertEmotes('Thích nè <3'), 'Thích nè ❤️');
       expect(ChatEmoteConverter.convertEmotes('Ngầu chưa B)'), 'Ngầu chưa 😎');
       expect(ChatEmoteConverter.convertEmotes('Được đấy (y)'), 'Được đấy 👍');
-      expect(ChatEmoteConverter.convertEmotes('Cánh cụt <(") nè'), 'Cánh cụt 🐧 nè');
-      expect(ChatEmoteConverter.convertEmotes('Cá mập (^^^) bơi'), 'Cá mập 🦈 bơi');
+      expect(
+        ChatEmoteConverter.convertEmotes('Cánh cụt <(") nè'),
+        'Cánh cụt 🐧 nè',
+      );
+      expect(
+        ChatEmoteConverter.convertEmotes('Cá mập (^^^) bơi'),
+        'Cá mập 🦈 bơi',
+      );
       expect(ChatEmoteConverter.convertEmotes('Khóc quá :((('), 'Khóc quá 😭');
       expect(ChatEmoteConverter.convertEmotes('Hôn nè :*'), 'Hôn nè 😘');
     });
@@ -47,7 +53,10 @@ void main() {
 
       final failed = message.copyWith(status: MessageStatus.failed);
       expect(failed.status, MessageStatus.failed);
-      expect(failed.clientMsgId, 'client_temp_100'); // ID giữ nguyên khi thử lại
+      expect(
+        failed.clientMsgId,
+        'client_temp_100',
+      ); // ID giữ nguyên khi thử lại
     });
 
     test('ConversationItem correctly parses unread_count and last_message', () {
@@ -56,10 +65,7 @@ void main() {
         'type': 'DIRECT',
         'display_name': 'Nguyễn Văn B',
         'display_avatar_url': 'https://example.com/b.jpg',
-        'last_message': {
-          'id': 'msg_88',
-          'content': 'Hẹn gặp ở thư viện',
-        },
+        'last_message': {'id': 'msg_88', 'content': 'Hẹn gặp ở thư viện'},
         'unread_count': '3',
       };
 
@@ -107,26 +113,32 @@ void main() {
   });
 
   group('Chat Draft Store', () {
-    test('DraftStore saves, recovers and removes chat message drafts', () async {
-      final memory = MemoryStore();
-      final draftStore = DraftStore(memory);
+    test(
+      'DraftStore saves, recovers and removes chat message drafts',
+      () async {
+        final memory = MemoryStore();
+        final draftStore = DraftStore(memory);
 
-      const userId = 'user_student_1';
-      const draftName = 'chat_draft_conv_42';
+        const userId = 'user_student_1';
+        const draftName = 'chat_draft_conv_42';
 
-      await draftStore.save(
-        userId: userId,
-        name: draftName,
-        data: {'text': 'Nội dung đang gõ dở…'},
-      );
+        await draftStore.save(
+          userId: userId,
+          name: draftName,
+          data: {'text': 'Nội dung đang gõ dở…'},
+        );
 
-      final recovered = await draftStore.read(userId: userId, name: draftName);
-      expect(recovered, isNotNull);
-      expect(recovered!['text'], 'Nội dung đang gõ dở…');
+        final recovered = await draftStore.read(
+          userId: userId,
+          name: draftName,
+        );
+        expect(recovered, isNotNull);
+        expect(recovered!['text'], 'Nội dung đang gõ dở…');
 
-      await draftStore.remove(userId: userId, name: draftName);
-      final empty = await draftStore.read(userId: userId, name: draftName);
-      expect(empty, isNull);
-    });
+        await draftStore.remove(userId: userId, name: draftName);
+        final empty = await draftStore.read(userId: userId, name: draftName);
+        expect(empty, isNull);
+      },
+    );
   });
 }

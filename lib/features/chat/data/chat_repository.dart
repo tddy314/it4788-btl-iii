@@ -9,24 +9,21 @@ import 'stomp_client.dart';
 
 class ChatRepository {
   ChatRepository({
-    required ApiClient api,
-    required JsonCache cache,
-    required MediaUploadService mediaUploadService,
+    required this.api,
+    required this.cache,
+    required this.mediaUploadService,
     SqbStompClient? stompClient,
     String? wsUrl,
-  }) : _api = api,
-       _cache = cache,
-       _mediaUploadService = mediaUploadService,
-       _stomp =
+  }) : _stomp =
            stompClient ??
            SqbStompClient(
              url: wsUrl ?? 'wss://snsqb.duckdns.org/api/v1/ws',
              tokenProvider: () async => api.session.tokens?.accessToken,
            );
 
-  final ApiClient _api;
-  final JsonCache _cache;
-  final MediaUploadService _mediaUploadService;
+  final ApiClient api;
+  final JsonCache cache;
+  final MediaUploadService mediaUploadService;
   final SqbStompClient? _stomp;
 
   static const _conversationsResource = 'conversations';
@@ -44,7 +41,7 @@ class ChatRepository {
       if (after != null && after.isNotEmpty) 'after': after,
     };
 
-    return _api.get(
+    return api.get(
       'conversations',
       query: query,
       decode: ConversationListResponse.fromJson,
@@ -53,7 +50,7 @@ class ChatRepository {
 
   // 2. Mở hoặc tạo cuộc trò chuyện 1-1
   Future<ConversationItem> createDirectConversation(String targetUserId) async {
-    return _api.request(
+    return api.request(
       'conversations/direct',
       method: 'POST',
       data: {'target_user_id': targetUserId},
@@ -72,7 +69,7 @@ class ChatRepository {
       if (after != null && after.isNotEmpty) 'after': after,
     };
 
-    return _api.get(
+    return api.get(
       'conversations/$conversationId/messages',
       query: query,
       decode: ChatMessagesResponse.fromJson,
@@ -86,8 +83,9 @@ class ChatRepository {
     required String clientMsgId,
     List<String> mediaUrls = const [],
   }) {
-    if (_stomp != null && _stomp!.isConnected) {
-      _stomp!.send('/app/chat.send', {
+    final client = _stomp;
+    if (client != null && client.isConnected) {
+      client.send('/app/chat.send', {
         'conversation_id': conversationId,
         'content': content,
         'client_msg_id': clientMsgId,
@@ -102,8 +100,9 @@ class ChatRepository {
     required String conversationId,
     required bool isTyping,
   }) {
-    if (_stomp != null && _stomp!.isConnected) {
-      _stomp!.send('/app/chat.typing', {
+    final client = _stomp;
+    if (client != null && client.isConnected) {
+      client.send('/app/chat.typing', {
         'conversation_id': conversationId,
         'is_typing': isTyping,
       });
@@ -115,8 +114,9 @@ class ChatRepository {
     required String conversationId,
     required String messageId,
   }) {
-    if (_stomp != null && _stomp!.isConnected) {
-      _stomp!.send('/app/chat.read', {
+    final client = _stomp;
+    if (client != null && client.isConnected) {
+      client.send('/app/chat.read', {
         'conversation_id': conversationId,
         'message_id': messageId,
       });
@@ -129,7 +129,7 @@ class ChatRepository {
     ProgressCallback? onProgress,
     CancelToken? cancelToken,
   }) {
-    return _mediaUploadService.upload(
+    return mediaUploadService.upload(
       filePath: filePath,
       purpose: MediaPurpose.chat,
       maxBytes: 4 * 1024 * 1024,
@@ -143,7 +143,7 @@ class ChatRepository {
   Future<ConversationListResponse?> loadCachedConversations(
     String userId,
   ) async {
-    final entry = await _cache.read(
+    final entry = await cache.read(
       userId: userId,
       resource: _conversationsResource,
     );
@@ -165,7 +165,7 @@ class ChatRepository {
       hasNext: response.hasNext,
     ).toJson();
 
-    await _cache.write(
+    await cache.write(
       userId: userId,
       resource: _conversationsResource,
       data: toSave,
@@ -176,7 +176,7 @@ class ChatRepository {
     required String userId,
     required String conversationId,
   }) async {
-    final entry = await _cache.read(
+    final entry = await cache.read(
       userId: userId,
       resource: _messagesResource(conversationId),
     );
@@ -202,7 +202,7 @@ class ChatRepository {
   }) async {
     // Chỉ cache tối đa 50 tin nhắn gần nhất theo đúng giới hạn bộ nhớ
     final toSave = messages.take(50).map((e) => e.toJson()).toList();
-    await _cache.write(
+    await cache.write(
       userId: userId,
       resource: _messagesResource(conversationId),
       data: toSave,

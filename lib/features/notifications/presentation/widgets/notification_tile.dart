@@ -26,8 +26,9 @@ class NotificationTile extends StatelessWidget {
   IconData _iconForType(String type) => switch (type.toUpperCase()) {
     'POST_LIKE' || 'LIKE' => Icons.thumb_up_alt_rounded,
     'POST_COMMENT' || 'COMMENT' => Icons.chat_bubble_outline_rounded,
-    'SESSION_APPROVED' || 'SESSION_REJECTED' || 'QUESTION_SESSION' =>
-      Icons.school_outlined,
+    'SESSION_APPROVED' ||
+    'SESSION_REJECTED' ||
+    'QUESTION_SESSION' => Icons.school_outlined,
     'FRIEND_REQUEST' || 'FRIEND_ACCEPT' => Icons.person_add_outlined,
     'NEW_MESSAGE' || 'CHAT' => Icons.mail_outline_rounded,
     _ => Icons.notifications_none_rounded,
@@ -54,7 +55,7 @@ class NotificationTile extends StatelessWidget {
 
     return Material(
       color: isUnread
-          ? theme.colorScheme.primaryContainer.withOpacity(0.25)
+          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.25)
           : Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -82,7 +83,7 @@ class NotificationTile extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 4,
                           ),
                         ],

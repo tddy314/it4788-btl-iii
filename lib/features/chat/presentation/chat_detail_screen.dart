@@ -44,9 +44,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map<String, dynamic>) {
-        _convId = widget.conversationId ?? args['conversationId']?.toString() ?? '';
-        _pName = widget.partnerName ?? args['partnerName'] as String? ?? 'Bạn học';
-        _pAvatar = widget.partnerAvatarUrl ?? args['partnerAvatarUrl'] as String?;
+        _convId =
+            widget.conversationId ?? args['conversationId']?.toString() ?? '';
+        _pName =
+            widget.partnerName ?? args['partnerName'] as String? ?? 'Bạn học';
+        _pAvatar =
+            widget.partnerAvatarUrl ?? args['partnerAvatarUrl'] as String?;
         _isBlocked = widget.isBlocked || (args['isBlocked'] == true);
       } else {
         _convId = widget.conversationId ?? '';
@@ -61,7 +64,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final repository = ChatRepository(
         api: deps.api,
         cache: deps.cache,
-        mediaUploadService: deps.media,
+        mediaUploadService: deps.mediaUpload,
       );
 
       _controller = ChatDetailController(
@@ -154,11 +157,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             titleSpacing: 0,
             title: Row(
               children: [
-                AppAvatar(
-                  imageUrl: _pAvatar,
-                  name: _pName,
-                  size: 36,
-                ),
+                AppAvatar(imageUrl: _pAvatar, name: _pName, size: 36),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -203,14 +202,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               if (controller.isPartnerTyping)
                 Container(
                   alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
-                      AppAvatar(
-                        imageUrl: _pAvatar,
-                        name: _pName,
-                        size: 20,
-                      ),
+                      AppAvatar(imageUrl: _pAvatar, name: _pName, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         '$_pName đang soạn tin nhắn…',
@@ -228,7 +226,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 Container(
                   width: double.infinity,
                   color: Colors.amber.shade100,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   child: Row(
                     children: [
                       const Icon(Icons.block, color: Colors.red, size: 20),
@@ -304,7 +305,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         final message = controller.messages[index];
         return ChatMessageBubble(
           message: message,
-          currentUserId: controller.partnerName == _pName ? 'my_id' : '',
+          currentUserId: controller.userId,
           onRetry: () => controller.retryFailedMessage(message),
         );
       },

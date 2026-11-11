@@ -11,28 +11,22 @@ import '../utils/chat_emote_converter.dart';
 
 class ChatDetailController extends ChangeNotifier {
   ChatDetailController({
-    required ChatRepository repository,
-    required DraftStore draftStore,
-    required String userId,
-    required String currentUserName,
-    required String conversationId,
-    required String partnerName,
-    String? partnerAvatarUrl,
-  }) : _repository = repository,
-       _draftStore = draftStore,
-       _userId = userId,
-       _currentUserName = currentUserName,
-       _conversationId = conversationId,
-       _partnerName = partnerName,
-       _partnerAvatarUrl = partnerAvatarUrl;
+    required this.repository,
+    required this.draftStore,
+    required this.userId,
+    required this.currentUserName,
+    required this.conversationId,
+    required this.partnerName,
+    this.partnerAvatarUrl,
+  });
 
-  final ChatRepository _repository;
-  final DraftStore _draftStore;
-  final String _userId;
-  final String _currentUserName;
-  final String _conversationId;
-  final String _partnerName;
-  final String? _partnerAvatarUrl;
+  final ChatRepository repository;
+  final DraftStore draftStore;
+  final String userId;
+  final String currentUserName;
+  final String conversationId;
+  final String partnerName;
+  final String? partnerAvatarUrl;
 
   List<ChatMessage> _messages = [];
   bool _isLoading = false;
@@ -54,23 +48,20 @@ class ChatDetailController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get hasNext => _hasNext;
   String get draftText => _draftText;
-  String get partnerName => _partnerName;
-  String? get partnerAvatarUrl => _partnerAvatarUrl;
-  String get conversationId => _conversationId;
 
-  String get _draftKey => 'chat_draft_$_conversationId';
+  String get _draftKey => 'chat_draft_$conversationId';
 
   Future<void> initialize() async {
     // 1. Phục hồi bản nháp (Draft) từ secure storage
-    final draftData = await _draftStore.read(userId: _userId, name: _draftKey);
+    final draftData = await draftStore.read(userId: userId, name: _draftKey);
     if (draftData != null && draftData['text'] is String) {
       _draftText = draftData['text'] as String;
     }
 
     // 2. Cache-first: Đọc tin nhắn offline đã lưu trên máy
-    final cached = await _repository.loadCachedMessages(
-      userId: _userId,
-      conversationId: _conversationId,
+    final cached = await repository.loadCachedMessages(
+      userId: userId,
+      conversationId: conversationId,
     );
     if (cached != null && cached.isNotEmpty) {
       _messages = cached;
@@ -85,25 +76,26 @@ class ChatDetailController extends ChangeNotifier {
   }
 
   void _setupRealtimeListeners() {
-    final stomp = _repository.stomp;
+    final stomp = repository.stomp;
     if (stomp == null) return;
     stomp.connect();
 
     // Lắng nghe tin nhắn mới gửi đến
     stomp.subscribe('/user/queue/messages', (payload) {
       final convId = payload['conversation_id']?.toString();
-      if (convId != _conversationId) return;
+      if (convId != conversationId) return;
 
       final incoming = ChatMessage.fromJson(payload);
       _handleIncomingMessage(incoming);
     });
 
     // Lắng nghe sự kiện typing từ đối phương
-    stomp.subscribe('/topic/conv.$_conversationId.typing', (payload) {
+    stomp.subscribe('/topic/conv.$conversationId.typing', (payload) {
       final senderUserId = payload['user_id']?.toString();
-      if (senderUserId == _userId) return; // Bỏ qua sự kiện của chính mình
+      if (senderUserId == userId) return; // Bỏ qua sự kiện của chính mình
 
-      final isTyping = payload['is_typing'] == true ||
+      final isTyping =
+          payload['is_typing'] == true ||
           payload['is_typing']?.toString().toLowerCase() == 'true';
 
       _isPartnerTyping = isTyping;
@@ -136,16 +128,16 @@ class ChatDetailController extends ChangeNotifier {
     notifyListeners();
 
     // Lưu cache 50 tin nhắn mới nhất
-    _repository.saveCachedMessages(
-      userId: _userId,
-      conversationId: _conversationId,
+    repository.saveCachedMessages(
+      userId: userId,
+      conversationId: conversationId,
       messages: _messages,
     );
 
     // Gửi xác nhận đã đọc nếu tin nhắn do đối phương gửi
-    if (!message.isMine(_userId) && message.messageId.isNotEmpty) {
-      _repository.sendReadStatus(
-        conversationId: _conversationId,
+    if (!message.isMine(userId) && message.messageId.isNotEmpty) {
+      repository.sendReadStatus(
+        conversationId: conversationId,
         messageId: message.messageId,
       );
     }
@@ -159,8 +151,8 @@ class ChatDetailController extends ChangeNotifier {
     }
 
     try {
-      final response = await _repository.fetchMessages(
-        _conversationId,
+      final response = await repository.fetchMessages(
+        conversationId,
         limit: 20,
       );
       _messages = response.messages;
@@ -168,9 +160,9 @@ class ChatDetailController extends ChangeNotifier {
       _hasNext = response.hasNext;
       _errorMessage = null;
 
-      await _repository.saveCachedMessages(
-        userId: _userId,
-        conversationId: _conversationId,
+      await repository.saveCachedMessages(
+        userId: userId,
+        conversationId: conversationId,
         messages: _messages,
       );
     } on AppFailure catch (failure) {
@@ -190,8 +182,8 @@ class ChatDetailController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _repository.fetchMessages(
-        _conversationId,
+      final response = await repository.fetchMessages(
+        conversationId,
         after: _after,
         limit: 20,
       );
@@ -221,10 +213,10 @@ class ChatDetailController extends ChangeNotifier {
     _draftDebounceTimer?.cancel();
     _draftDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (_draftText.trim().isEmpty) {
-        _draftStore.remove(userId: _userId, name: _draftKey);
+        draftStore.remove(userId: userId, name: _draftKey);
       } else {
-        _draftStore.save(
-          userId: _userId,
+        draftStore.save(
+          userId: userId,
           name: _draftKey,
           data: {'text': _draftText},
         );
@@ -234,8 +226,8 @@ class ChatDetailController extends ChangeNotifier {
     // 2. Phát sự kiện typing qua socket (debounce 300ms)
     _typingDebounceTimer?.cancel();
     _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-      _repository.sendTypingStatus(
-        conversationId: _conversationId,
+      repository.sendTypingStatus(
+        conversationId: conversationId,
         isTyping: text.trim().isNotEmpty,
       );
     });
@@ -257,9 +249,9 @@ class ChatDetailController extends ChangeNotifier {
     final tempMessage = ChatMessage(
       messageId: '',
       clientMsgId: clientMsgId,
-      conversationId: _conversationId,
-      senderId: _userId,
-      senderName: _currentUserName,
+      conversationId: conversationId,
+      senderId: userId,
+      senderName: currentUserName,
       content: processedContent,
       createdAt: DateTime.now(),
       status: MessageStatus.sending,
@@ -271,19 +263,19 @@ class ChatDetailController extends ChangeNotifier {
     notifyListeners();
 
     // 2. Xóa bản nháp sau khi đã bấm gửi
-    _draftStore.remove(userId: _userId, name: _draftKey);
+    draftStore.remove(userId: userId, name: _draftKey);
 
     // 3. Tắt trạng thái typing
-    _repository.sendTypingStatus(
-      conversationId: _conversationId,
+    repository.sendTypingStatus(
+      conversationId: conversationId,
       isTyping: false,
     );
 
     // 4. Gửi qua STOMP WebSocket
     try {
-      if (_repository.stomp != null && _repository.stomp!.isConnected) {
-        _repository.sendStompMessage(
-          conversationId: _conversationId,
+      if (repository.stomp != null && repository.stomp!.isConnected) {
+        repository.sendStompMessage(
+          conversationId: conversationId,
           content: processedContent,
           clientMsgId: clientMsgId,
         );
@@ -293,9 +285,9 @@ class ChatDetailController extends ChangeNotifier {
       }
 
       // Lưu cache cục bộ
-      _repository.saveCachedMessages(
-        userId: _userId,
-        conversationId: _conversationId,
+      repository.saveCachedMessages(
+        userId: userId,
+        conversationId: conversationId,
         messages: _messages,
       );
     } catch (_) {
@@ -312,9 +304,9 @@ class ChatDetailController extends ChangeNotifier {
     final tempMessage = ChatMessage(
       messageId: '',
       clientMsgId: clientMsgId,
-      conversationId: _conversationId,
-      senderId: _userId,
-      senderName: _currentUserName,
+      conversationId: conversationId,
+      senderId: userId,
+      senderName: currentUserName,
       content: '[Hình ảnh]',
       messageType: MessageType.image,
       mediaUrls: [imageFilePath], // Đường dẫn local hiển thị trước
@@ -327,11 +319,11 @@ class ChatDetailController extends ChangeNotifier {
 
     try {
       // 1. Upload ảnh lên server với purpose=CHAT (Slide 157)
-      final uploaded = await _repository.uploadChatImage(imageFilePath);
+      final uploaded = await repository.uploadChatImage(imageFilePath);
 
       // 2. Gửi STOMP mang URL ảnh từ server
-      _repository.sendStompMessage(
-        conversationId: _conversationId,
+      repository.sendStompMessage(
+        conversationId: conversationId,
         content: '[Hình ảnh]',
         clientMsgId: clientMsgId,
         mediaUrls: [uploaded.url],
@@ -357,9 +349,9 @@ class ChatDetailController extends ChangeNotifier {
       sendImageMessage(failedMessage.mediaUrls.first);
     } else {
       try {
-        if (_repository.stomp != null && _repository.stomp!.isConnected) {
-          _repository.sendStompMessage(
-            conversationId: _conversationId,
+        if (repository.stomp != null && repository.stomp!.isConnected) {
+          repository.sendStompMessage(
+            conversationId: conversationId,
             content: failedMessage.content,
             clientMsgId: failedMessage.clientMsgId, // Giữ nguyên ID chống trùng
           );

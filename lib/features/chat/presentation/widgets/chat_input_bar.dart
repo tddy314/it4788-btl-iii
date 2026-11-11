@@ -89,31 +89,29 @@ class _ChatInputBarState extends State<ChatInputBar> {
               children: [
                 Text(
                   'Biểu tượng cảm xúc (Ký tự đặc biệt)',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
                   runSpacing: 10,
-                  children:
-                      ChatEmoteConverter.emoteMap.entries.map((entry) {
-                        return ActionChip(
-                          avatar: Text(
-                            entry.value,
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          label: Text(
-                            entry.key,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          onPressed: () {
-                            _insertEmote(entry.key);
-                            Navigator.of(context).pop();
-                          },
-                        );
-                      }).toList(),
+                  children: ChatEmoteConverter.emoteMap.entries.map((entry) {
+                    return ActionChip(
+                      avatar: Text(
+                        entry.value,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                      label: Text(
+                        entry.key,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () {
+                        _insertEmote(entry.key);
+                        Navigator.of(context).pop();
+                      },
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -196,10 +194,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
               tooltip: 'Gửi',
               icon: Icon(
                 Icons.send_rounded,
-                color:
-                    _canSend
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.outline.withOpacity(0.5),
+                color: _canSend
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline.withValues(alpha: 0.5),
               ),
               onPressed: _canSend ? _handleSend : null,
             ),

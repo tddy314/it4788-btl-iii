@@ -5,14 +5,10 @@ import '../data/chat_repository.dart';
 import '../models/conversation_item.dart';
 
 class ConversationsController extends ChangeNotifier {
-  ConversationsController({
-    required ChatRepository repository,
-    required String userId,
-  }) : _repository = repository,
-       _userId = userId;
+  ConversationsController({required this.repository, required this.userId});
 
-  final ChatRepository _repository;
-  final String _userId;
+  final ChatRepository repository;
+  final String userId;
 
   List<ConversationItem> _items = [];
   bool _isLoading = false;
@@ -29,7 +25,7 @@ class ConversationsController extends ChangeNotifier {
 
   Future<void> initialize() async {
     // 1. Cache-first loading
-    final cached = await _repository.loadCachedConversations(_userId);
+    final cached = await repository.loadCachedConversations(userId);
     if (cached != null && cached.items.isNotEmpty) {
       _items = cached.items;
       _after = cached.after;
@@ -45,7 +41,7 @@ class ConversationsController extends ChangeNotifier {
   }
 
   void _setupStompListener() {
-    final stomp = _repository.stomp;
+    final stomp = repository.stomp;
     if (stomp == null) return;
     stomp.connect();
 
@@ -67,8 +63,8 @@ class ConversationsController extends ChangeNotifier {
         _items.removeAt(index);
         _items.insert(0, updated);
         notifyListeners();
-        _repository.saveCachedConversations(
-          _userId,
+        repository.saveCachedConversations(
+          userId,
           ConversationListResponse(
             items: _items,
             after: _after,
@@ -90,13 +86,13 @@ class ConversationsController extends ChangeNotifier {
     }
 
     try {
-      final response = await _repository.fetchConversations(limit: 20);
+      final response = await repository.fetchConversations(limit: 20);
       _items = response.items;
       _after = response.after;
       _hasNext = response.hasNext;
       _errorMessage = null;
 
-      await _repository.saveCachedConversations(_userId, response);
+      await repository.saveCachedConversations(userId, response);
     } on AppFailure catch (failure) {
       _errorMessage = failure.message;
     } catch (_) {
@@ -118,7 +114,7 @@ class ConversationsController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _repository.fetchConversations(
+      final response = await repository.fetchConversations(
         after: _after,
         limit: 20,
       );

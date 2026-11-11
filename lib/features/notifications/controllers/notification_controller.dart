@@ -5,14 +5,10 @@ import '../data/notification_repository.dart';
 import '../models/notification_item.dart';
 
 class NotificationController extends ChangeNotifier {
-  NotificationController({
-    required NotificationRepository repository,
-    required String userId,
-  }) : _repository = repository,
-       _userId = userId;
+  NotificationController({required this.repository, required this.userId});
 
-  final NotificationRepository _repository;
-  final String _userId;
+  final NotificationRepository repository;
+  final String userId;
 
   List<NotificationItem> _items = [];
   int _unreadCount = 0;
@@ -35,7 +31,7 @@ class NotificationController extends ChangeNotifier {
 
   Future<void> initialize() async {
     // 1. Đọc từ cache trước (Cache-first pattern để hiển thị tức thì & hỗ trợ offline)
-    final cached = await _repository.loadCached(_userId);
+    final cached = await repository.loadCached(userId);
     if (cached != null && cached.items.isNotEmpty) {
       _items = cached.items;
       _unreadCount = cached.unreadCount;
@@ -57,7 +53,7 @@ class NotificationController extends ChangeNotifier {
     }
 
     try {
-      final response = await _repository.fetchNotifications(limit: 20);
+      final response = await repository.fetchNotifications(limit: 20);
       _items = response.items;
       _unreadCount = response.unreadCount;
       _after = response.after;
@@ -66,7 +62,7 @@ class NotificationController extends ChangeNotifier {
       _isFromCache = false;
 
       // Lưu lại cache mới nhất
-      await _repository.saveToCache(_userId, response);
+      await repository.saveToCache(userId, response);
     } on AppFailure catch (failure) {
       // Nếu đã có cache thì giữ nguyên dữ liệu trên màn hình, chỉ lưu message lỗi
       _errorMessage = failure.message;
@@ -89,7 +85,7 @@ class NotificationController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _repository.fetchNotifications(
+      final response = await repository.fetchNotifications(
         after: _after,
         limit: 20,
       );
@@ -121,7 +117,7 @@ class NotificationController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _repository.markAsRead(notificationId);
+      await repository.markAsRead(notificationId);
     } catch (_) {
       // Lỗi mạng khi mark read không ảnh hưởng trải nghiệm đọc
     }
@@ -137,7 +133,7 @@ class NotificationController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _repository.markAllAsRead();
+      await repository.markAllAsRead();
     } catch (_) {
       // Giữ optimistic update
     } finally {
