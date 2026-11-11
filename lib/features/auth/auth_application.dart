@@ -11,6 +11,8 @@ import '../relationships/relationships_screen.dart';
 import '../relationships/friend_finder_screen.dart';
 import '../relationships/social_models.dart';
 import '../relationships/social_state.dart';
+import '../question_bank/question_bank_routes.dart';
+import '../question_bank/question_bank_tab.dart';
 import '../settings/change_password_screen.dart';
 import '../settings/settings_screen.dart';
 import 'auth_controller.dart';
@@ -61,6 +63,8 @@ class _AuthApplicationState extends State<AuthApplication> {
       AppTab.profile: (_) => ProfileScreen(changes: _social, embedded: true),
       AppTab.friends: (_) =>
           RelationshipsScreen(changes: _social, embedded: true),
+      AppTab.questionBank: (_) => const QuestionBankTab(),
+      AppTab.profile: (_) => SettingsScreen(auth: _auth, embedded: true),
     },
     protectedRoutes: {
       RelationshipRoutes.findFriends: (_) =>
@@ -103,6 +107,7 @@ class _AuthApplicationState extends State<AuthApplication> {
       ),
       SettingsRoutes.changePassword: (_) =>
           ChangePasswordScreen(repository: _repository),
+      ...QuestionBankRoutes.routes,
     },
   );
 }
