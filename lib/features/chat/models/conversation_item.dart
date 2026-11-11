@@ -151,3 +151,28 @@ class ConversationListResponse {
     'pagination': {'after': after, 'has_next': hasNext},
   };
 }
+
+class ChatPartnerSummary {
+  const ChatPartnerSummary({
+    required this.userId,
+    required this.fullName,
+    this.avatarUrl,
+    this.studentCode,
+    this.subtitle,
+  });
+
+  final String userId;
+  final String fullName;
+  final String? avatarUrl;
+  final String? studentCode;
+  final String? subtitle;
+
+  factory ChatPartnerSummary.fromJson(Map<String, dynamic> json) =>
+      ChatPartnerSummary(
+        userId: json['user_id']?.toString() ?? '',
+        fullName: json['full_name'] as String? ?? 'Người dùng',
+        avatarUrl: json['avatar_url'] as String?,
+        studentCode: json['student_lecturer_code'] as String?,
+        subtitle: json['school_faculty'] as String?,
+      );
+}

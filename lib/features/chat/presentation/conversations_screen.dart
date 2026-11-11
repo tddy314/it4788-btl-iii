@@ -7,6 +7,7 @@ import '../../../core/widgets/app_states.dart';
 import '../controllers/conversations_controller.dart';
 import '../data/chat_repository.dart';
 import '../models/conversation_item.dart';
+import 'widgets/new_chat_sheet.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
@@ -17,10 +18,13 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
   ConversationsController? _controller;
+  ChatRepository? _repository;
+  String _currentUserId = 'anonymous';
   final _scrollController = ScrollController();
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _initialized = false;
+  bool _isOpeningChat = false;
 
   @override
   void didChangeDependencies() {
@@ -28,17 +32,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     if (!_initialized) {
       _initialized = true;
       final deps = AppScope.of(context);
-      final userId = deps.session.tokens?.userId ?? 'anonymous';
+      _currentUserId = deps.session.tokens?.userId ?? 'anonymous';
 
       final repository = ChatRepository(
         api: deps.api,
         cache: deps.cache,
         mediaUploadService: deps.mediaUpload,
       );
+      _repository = repository;
 
       _controller = ConversationsController(
         repository: repository,
-        userId: userId,
+        userId: _currentUserId,
       )..initialize();
 
       _scrollController.addListener(_onScroll);
@@ -60,93 +65,64 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     super.dispose();
   }
 
-  void _openNewChatDialog(BuildContext context) {
-    final targetIdController = TextEditingController();
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nhắn tin với bạn học'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Nhập ID tài khoản (user_id) của người muốn trò chuyện:',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: targetIdController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'Ví dụ: 2 hoặc 5',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final targetId = targetIdController.text.trim();
-              final parsed = int.tryParse(targetId);
-              if (parsed == null || parsed <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Vui lòng nhập ID người dùng là số nguyên dương.',
-                    ),
-                  ),
-                );
-                return;
-              }
-              Navigator.of(ctx).pop();
-              try {
-                final deps = AppScope.of(context);
-                final repo = ChatRepository(
-                  api: deps.api,
-                  cache: deps.cache,
-                  mediaUploadService: deps.mediaUpload,
-                );
-                final conv = await repo.createDirectConversation(
-                  targetId,
-                  currentUserId: deps.session.tokens?.userId,
-                );
-                if (context.mounted) {
-                  Navigator.of(context).pushNamed(
-                    '/chat',
-                    arguments: {
-                      'conversationId': conv.conversationId,
-                      'partnerName': conv.displayName,
-                      'partnerAvatarUrl': conv.displayAvatarUrl,
-                    },
-                  );
-                }
-              } on AppFailure catch (failure) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(failure.message)));
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Không thể tạo cuộc trò chuyện với người này.',
-                      ),
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Bắt đầu'),
-          ),
-        ],
-      ),
+  Future<void> _navigateToConversation(ConversationItem conv) async {
+    await Navigator.of(context).pushNamed(
+      '/chat',
+      arguments: {
+        'conversationId': conv.conversationId,
+        'partnerName': conv.displayName,
+        'partnerAvatarUrl': conv.displayAvatarUrl,
+      },
     );
+    if (mounted) {
+      await _controller?.refresh();
+    }
+  }
+
+  Future<void> _openNewChatSheet(BuildContext context) async {
+    final repo = _repository;
+    if (repo == null) return;
+    final conv = await showModalBottomSheet<ConversationItem>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          NewChatSheet(repository: repo, currentUserId: _currentUserId),
+    );
+    if (conv != null && mounted) {
+      await _navigateToConversation(conv);
+    }
+  }
+
+  Future<void> _startDirectChatWithFriend(ChatPartnerSummary friend) async {
+    final repo = _repository;
+    if (repo == null || _isOpeningChat) return;
+    setState(() => _isOpeningChat = true);
+    try {
+      final conv = await repo.createDirectConversation(
+        friend.userId,
+        currentUserId: _currentUserId,
+      );
+      if (mounted) {
+        await _navigateToConversation(conv);
+      }
+    } on AppFailure catch (failure) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(failure.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể mở cuộc trò chuyện với bạn bè này.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningChat = false);
+      }
+    }
   }
 
   @override
@@ -165,13 +141,22 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final filteredItems = _searchQuery.isEmpty
+        final query = _searchQuery.trim().toLowerCase();
+        final filteredItems = query.isEmpty
             ? controller.items
             : controller.items
                   .where(
-                    (item) => item.displayName.toLowerCase().contains(
-                      _searchQuery.toLowerCase(),
-                    ),
+                    (item) => item.displayName.toLowerCase().contains(query),
+                  )
+                  .toList();
+        final filteredFriends = query.isEmpty
+            ? controller.friends
+            : controller.friends
+                  .where(
+                    (friend) =>
+                        friend.fullName.toLowerCase().contains(query) ||
+                        (friend.studentCode?.toLowerCase().contains(query) ??
+                            false),
                   )
                   .toList();
 
@@ -182,13 +167,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               IconButton(
                 tooltip: 'Cuộc trò chuyện mới',
                 icon: const Icon(Icons.edit_note_rounded),
-                onPressed: () => _openNewChatDialog(context),
+                onPressed: () => _openNewChatSheet(context),
               ),
             ],
           ),
           body: Column(
             children: [
-              // Thanh tìm kiếm nhanh cuộc trò chuyện
+              if (_isOpeningChat) const LinearProgressIndicator(minHeight: 2),
+              // Thanh tìm kiếm nhanh bạn bè và cuộc trò chuyện
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -198,7 +184,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   controller: _searchController,
                   onChanged: (val) => setState(() => _searchQuery = val),
                   decoration: InputDecoration(
-                    hintText: 'Tìm kiếm cuộc trò chuyện…',
+                    hintText: 'Tìm bạn bè hoặc cuộc trò chuyện…',
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -220,8 +206,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 ),
               ),
 
+              if (filteredFriends.isNotEmpty)
+                _buildFriendsStrip(context, filteredFriends),
+
               // Danh sách hội thoại
-              Expanded(child: _buildList(context, controller, filteredItems)),
+              Expanded(
+                child: _buildList(
+                  context,
+                  controller,
+                  filteredItems,
+                  hasFriends: filteredFriends.isNotEmpty,
+                ),
+              ),
             ],
           ),
         );
@@ -229,11 +225,74 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
+  Widget _buildFriendsStrip(
+    BuildContext context,
+    List<ChatPartnerSummary> friends,
+  ) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+          child: Text(
+            'Bạn bè (${friends.length})',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 86,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: friends.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 14),
+            itemBuilder: (context, index) {
+              final friend = friends[index];
+              return SizedBox(
+                width: 64,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _isOpeningChat
+                      ? null
+                      : () => _startDirectChatWithFriend(friend),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppAvatar(
+                        imageUrl: friend.avatarUrl,
+                        name: friend.fullName,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        friend.fullName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+
   Widget _buildList(
     BuildContext context,
     ConversationsController controller,
-    List<ConversationItem> items,
-  ) {
+    List<ConversationItem> items, {
+    required bool hasFriends,
+  }) {
     if (controller.isLoading && items.isEmpty) {
       return const AppLoadingState(message: 'Đang tải các cuộc trò chuyện…');
     }
@@ -246,6 +305,39 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
 
     if (items.isEmpty) {
+      if (hasFriends) {
+        final theme = Theme.of(context);
+        return RefreshIndicator(
+          onRefresh: controller.refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+            children: [
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 44,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Chưa có tin nhắn nào',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Chọn bạn bè phía trên hoặc bấm nút tạo mới ở góc trên để bắt đầu trò chuyện.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       return const AppEmptyState(
         icon: Icons.chat_bubble_outline_rounded,
         title: 'Chưa có tin nhắn',
@@ -322,16 +414,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     ),
                   )
                 : null,
-            onTap: () {
-              Navigator.of(context).pushNamed(
-                '/chat',
-                arguments: {
-                  'conversationId': item.conversationId,
-                  'partnerName': item.displayName,
-                  'partnerAvatarUrl': item.displayAvatarUrl,
-                },
-              );
-            },
+            onTap: () => _navigateToConversation(item),
           );
         },
       ),

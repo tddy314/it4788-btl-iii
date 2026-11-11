@@ -11,6 +11,7 @@ class ConversationsController extends ChangeNotifier {
   final String userId;
 
   List<ConversationItem> _items = [];
+  List<ChatPartnerSummary> _friends = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
   String? _errorMessage;
@@ -18,6 +19,7 @@ class ConversationsController extends ChangeNotifier {
   bool _hasNext = false;
 
   List<ConversationItem> get items => List.unmodifiable(_items);
+  List<ChatPartnerSummary> get friends => List.unmodifiable(_friends);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   String? get errorMessage => _errorMessage;
@@ -33,11 +35,24 @@ class ConversationsController extends ChangeNotifier {
       notifyListeners();
     }
 
-    // 2. Lấy dữ liệu mới nhất
-    await fetchFirstPage(showLoading: _items.isEmpty);
+    // 2. Lấy danh sách hội thoại và danh sách bạn bè từ server
+    await Future.wait([
+      fetchFirstPage(showLoading: _items.isEmpty),
+      _loadFriends(),
+    ]);
 
     // 3. Lắng nghe tin nhắn mới qua STOMP WebSocket để cập nhật danh sách hội thoại
     _setupStompListener();
+  }
+
+  Future<void> _loadFriends() async {
+    try {
+      final list = await repository.fetchFriendsForChat();
+      _friends = list.where((f) => f.userId != userId).toList();
+      notifyListeners();
+    } catch (_) {
+      // Lỗi tải danh sách bạn bè không làm hỏng danh sách hội thoại cache
+    }
   }
 
   void _setupStompListener() {
@@ -104,7 +119,7 @@ class ConversationsController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    await fetchFirstPage(showLoading: false);
+    await Future.wait([fetchFirstPage(showLoading: false), _loadFriends()]);
   }
 
   Future<void> loadMore() async {

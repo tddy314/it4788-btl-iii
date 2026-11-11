@@ -65,6 +65,49 @@ class ChatRepository {
     );
   }
 
+  // 2b. Lấy danh sách bạn bè để hiển thị và chọn nhắn tin nhanh
+  Future<List<ChatPartnerSummary>> fetchFriendsForChat({int limit = 30}) async {
+    return api.get(
+      'friendships',
+      query: {'limit': limit},
+      decode: decodePartnerList,
+    );
+  }
+
+  // 2c. Tìm người dùng theo tên hoặc MSSV (GET /search?type=USER)
+  Future<List<ChatPartnerSummary>> searchUsersForChat(
+    String query, {
+    CancelToken? cancelToken,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+    return api.get(
+      'search',
+      query: {'query': trimmed, 'type': 'USER', 'limit': 20},
+      cancelToken: cancelToken,
+      decode: decodePartnerList,
+    );
+  }
+
+  static List<ChatPartnerSummary> decodePartnerList(Object? data) {
+    if (data is! Map<String, dynamic>) return const [];
+    final items = data['items'];
+    if (items is! List) return const [];
+    final result = <ChatPartnerSummary>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        final userMap = raw['user'] is Map<String, dynamic>
+            ? raw['user'] as Map<String, dynamic>
+            : raw;
+        final partner = ChatPartnerSummary.fromJson(userMap);
+        if (partner.userId.isNotEmpty) {
+          result.add(partner);
+        }
+      }
+    }
+    return result;
+  }
+
   // 3. Tải danh sách tin nhắn của cuộc trò chuyện
   Future<ChatMessagesResponse> fetchMessages(
     String conversationId, {

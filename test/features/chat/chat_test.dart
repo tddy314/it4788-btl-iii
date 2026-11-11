@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:it4788_btl/core/storage/draft_store.dart';
+import 'package:it4788_btl/features/chat/data/chat_repository.dart';
 import 'package:it4788_btl/features/chat/data/stomp_client.dart';
 import 'package:it4788_btl/features/chat/models/chat_message.dart';
 import 'package:it4788_btl/features/chat/models/conversation_item.dart';
@@ -173,5 +174,74 @@ void main() {
         expect(empty, isNull);
       },
     );
+  });
+
+  group('ChatPartnerSummary & Partner Discovery', () {
+    test('ChatPartnerSummary parses flat friend DTO fields cleanly', () {
+      final partner = ChatPartnerSummary.fromJson({
+        'user_id': 42,
+        'full_name': 'Nguyễn Minh An',
+        'avatar_url': 'https://cdn.example.com/a.jpg',
+        'student_lecturer_code': '20225678',
+        'school_faculty': 'SoICT',
+      });
+
+      expect(partner.userId, '42');
+      expect(partner.fullName, 'Nguyễn Minh An');
+      expect(partner.avatarUrl, 'https://cdn.example.com/a.jpg');
+      expect(partner.studentCode, '20225678');
+      expect(partner.subtitle, 'SoICT');
+    });
+
+    test(
+      'ChatRepository.decodePartnerList handles GET /friendships items payload',
+      () {
+        final partners = ChatRepository.decodePartnerList({
+          'items': [
+            {
+              'user_id': 2,
+              'full_name': 'Bạn A',
+              'avatar_url': 'https://cdn.example.com/2.png',
+            },
+            {'user_id': 5, 'full_name': 'Bạn B'},
+          ],
+        });
+
+        expect(partners, hasLength(2));
+        expect(partners[0].userId, '2');
+        expect(partners[0].fullName, 'Bạn A');
+        expect(partners[0].avatarUrl, 'https://cdn.example.com/2.png');
+        expect(partners[1].userId, '5');
+        expect(partners[1].fullName, 'Bạn B');
+      },
+    );
+
+    test('ChatRepository.decodePartnerList handles GET /search?type=USER nested user items with MSSV', () {
+      final partners = ChatRepository.decodePartnerList({
+        'items': [
+          {
+            'user': {
+              'user_id': 99,
+              'full_name': 'Trần Thảo Vy',
+              'student_lecturer_code': '20221234',
+              'school_faculty': 'Trường CNTT&TT',
+            },
+          },
+          {
+            'user_id': 100,
+            'full_name': 'Lê Hoàng',
+            'student_lecturer_code': '20224321',
+          },
+        ],
+      });
+
+      expect(partners, hasLength(2));
+      expect(partners[0].userId, '99');
+      expect(partners[0].fullName, 'Trần Thảo Vy');
+      expect(partners[0].studentCode, '20221234');
+      expect(partners[0].subtitle, 'Trường CNTT&TT');
+      expect(partners[1].userId, '100');
+      expect(partners[1].studentCode, '20224321');
+    });
   });
 }
