@@ -153,12 +153,22 @@ class ChatDetailController extends ChangeNotifier {
   }
 
   void _handleIncomingMessage(ChatMessage message) {
-    // Kiểm tra tin nhắn đã tồn tại chưa (tránh trùng theo messageId hoặc clientMsgId)
-    final existingIndex = _messages.indexWhere(
-      (m) =>
-          (m.messageId.isNotEmpty && m.messageId == message.messageId) ||
-          (m.clientMsgId.isNotEmpty && m.clientMsgId == message.clientMsgId),
-    );
+    // Kiểm tra tin nhắn đã tồn tại chưa (tránh trùng theo messageId, clientMsgId hoặc nội dung tương ứng của chính mình)
+    final existingIndex = _messages.indexWhere((m) {
+      if (m.messageId.isNotEmpty && m.messageId == message.messageId) {
+        return true;
+      }
+      if (m.clientMsgId.isNotEmpty && m.clientMsgId == message.clientMsgId) {
+        return true;
+      }
+      if (message.isMine(userId) && m.isMine(userId)) {
+        if (m.content == message.content &&
+            message.createdAt.difference(m.createdAt).abs().inSeconds < 30) {
+          return true;
+        }
+      }
+      return false;
+    });
 
     if (existingIndex != -1) {
       _messages[existingIndex] = message.copyWith(status: MessageStatus.sent);
@@ -348,6 +358,7 @@ class ChatDetailController extends ChangeNotifier {
           content: processedContent,
           clientMsgId: clientMsgId,
         );
+        _markMessageStatus(clientMsgId, MessageStatus.sent);
       } else {
         // Nếu socket chưa nối hoặc offline, đánh dấu failed để có nút Thử lại
         _markMessageStatus(clientMsgId, MessageStatus.failed);

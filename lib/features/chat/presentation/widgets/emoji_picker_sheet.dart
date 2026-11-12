@@ -1285,7 +1285,7 @@ class EmojiPickerSheet extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Biểu tượng cảm xúc (Messenger Unicode)',
+                      'Biểu tượng cảm xúc',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

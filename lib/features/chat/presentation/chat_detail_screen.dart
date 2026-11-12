@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/app_scope.dart';
 import '../../../core/widgets/app_network_image.dart';
@@ -95,47 +96,52 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     super.dispose();
   }
 
-  void _pickAndSendImage(BuildContext context) {
-    final textController = TextEditingController();
-    showDialog<void>(
+  Future<void> _pickAndSendImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Gửi hình ảnh'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
           children: [
-            const Text(
-              'Chọn ảnh từ thư viện thiết bị hoặc nhập đường dẫn tệp ảnh (tối đa 4MB):',
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Chọn từ thư viện ảnh'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              decoration: const InputDecoration(
-                hintText: 'C:\\path\\to\\image.png hoặc /sdcard/image.jpg',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('Chụp ảnh từ máy ảnh'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final path = textController.text.trim();
-              if (path.isNotEmpty) {
-                Navigator.of(ctx).pop();
-                _controller?.sendImageMessage(path);
-              }
-            },
-            child: const Text('Gửi ảnh'),
-          ),
-        ],
       ),
     );
+
+    if (source == null || !mounted) return;
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (picked != null && mounted) {
+        _controller?.sendImageMessage(picked.path);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể truy cập hình ảnh trên thiết bị.'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -252,7 +258,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   initialText: controller.draftText,
                   onTextChanged: controller.onTextChanged,
                   onSendText: controller.sendTextMessage,
-                  onPickImage: () => _pickAndSendImage(context),
+                  onPickImage: _pickAndSendImage,
                 ),
             ],
           ),
