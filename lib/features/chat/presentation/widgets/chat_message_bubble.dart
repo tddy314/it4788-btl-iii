@@ -207,12 +207,28 @@ class ChatMessageBubble extends StatelessWidget {
         height: 10,
         child: CircularProgressIndicator(strokeWidth: 1.5),
       ),
-      MessageStatus.sent => Icon(
-        message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
-        size: 13,
-        color: message.isRead
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.outline,
+      MessageStatus.sent => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+            size: 13,
+            color: message.isRead
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline,
+          ),
+          if (message.isRead) ...[
+            const SizedBox(width: 2),
+            Text(
+              'Đã xem',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
+        ],
       ),
       MessageStatus.failed => GestureDetector(
         onTap: onRetry,

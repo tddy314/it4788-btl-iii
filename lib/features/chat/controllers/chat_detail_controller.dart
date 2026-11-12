@@ -110,6 +110,46 @@ class ChatDetailController extends ChangeNotifier {
         });
       }
     });
+
+    // Lắng nghe sự kiện đã xem tin nhắn từ đối phương
+    stomp.subscribe('/topic/conv.$conversationId.read', (payload) {
+      final readerUserId =
+          payload['user_id']?.toString() ?? payload['reader_id']?.toString();
+      if (readerUserId == userId) return;
+
+      final readMessageId = payload['message_id']?.toString();
+      _handlePartnerReadEvent(readMessageId);
+    });
+  }
+
+  void _handlePartnerReadEvent(String? readMessageId) {
+    var updated = false;
+    for (var i = 0; i < _messages.length; i++) {
+      final m = _messages[i];
+      if (m.isMine(userId) && !m.isRead) {
+        _messages[i] = m.copyWith(isRead: true);
+        updated = true;
+      }
+    }
+    if (updated) {
+      notifyListeners();
+      repository.saveCachedMessages(
+        userId: userId,
+        conversationId: conversationId,
+        messages: _messages,
+      );
+    }
+  }
+
+  void _markAllIncomingAsRead() {
+    for (final msg in _messages) {
+      if (!msg.isMine(userId) && msg.messageId.isNotEmpty) {
+        repository.sendReadStatus(
+          conversationId: conversationId,
+          messageId: msg.messageId,
+        );
+      }
+    }
   }
 
   void _handleIncomingMessage(ChatMessage message) {
@@ -184,6 +224,7 @@ class ChatDetailController extends ChangeNotifier {
         conversationId: conversationId,
         messages: _messages,
       );
+      _markAllIncomingAsRead();
     } on AppFailure catch (failure) {
       _errorMessage = failure.message;
     } catch (_) {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../utils/chat_emote_converter.dart';
+import 'emoji_picker_sheet.dart';
 
 class ChatInputBar extends StatefulWidget {
   const ChatInputBar({
@@ -66,7 +66,6 @@ class _ChatInputBarState extends State<ChatInputBar> {
   }
 
   void _showEmotePicker(BuildContext context) {
-    final uniqueEmojis = ChatEmoteConverter.emoteMap.values.toSet().toList();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -74,67 +73,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        final mediaQuery = MediaQuery.of(context);
-        return SafeArea(
-          child: SizedBox(
-            height: mediaQuery.size.height * 0.42,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Biểu tượng cảm xúc',
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 6,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                          childAspectRatio: 1.1,
-                        ),
-                    itemCount: uniqueEmojis.length,
-                    itemBuilder: (context, index) {
-                      final emoji = uniqueEmojis[index];
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          _insertEmote(emoji);
-                          Navigator.of(context).pop();
-                        },
-                        child: Center(
-                          child: Text(
-                            emoji,
-                            style: const TextStyle(fontSize: 26),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+        return EmojiPickerSheet(onEmojiSelected: _insertEmote);
       },
     );
   }
