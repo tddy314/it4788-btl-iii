@@ -6,6 +6,7 @@ import '../auth/auth_controller.dart';
 abstract final class SettingsRoutes {
   static const settings = '/settings';
   static const changePassword = '/settings/change-password';
+  static const pushSettings = '/settings/push';
 }
 
 /// Menu cài đặt tài khoản, không thay thế màn hồ sơ của thành viên 4.
@@ -59,6 +60,16 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () =>
                       Navigator.of(context)
                           .pushNamed(SettingsRoutes.changePassword),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.notifications_outlined),
+                  title: const Text('Cài đặt thông báo'),
+                  trailing: const Icon(Icons.chevron_right),
+                  enabled: !auth.busy,
+                  onTap: () =>
+                      Navigator.of(context)
+                          .pushNamed(SettingsRoutes.pushSettings),
                 ),
                 const Divider(height: 1),
                 ListTile(

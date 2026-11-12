@@ -7,12 +7,12 @@ import '../../core/storage/key_value_store.dart';
 import '../../core/widgets/app_states.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_screen.dart';
-import '../relationships/relationships_screen.dart';
-import '../relationships/friend_finder_screen.dart';
-import '../relationships/social_models.dart';
-import '../relationships/social_state.dart';
 import '../question_bank/question_bank_routes.dart';
 import '../question_bank/question_bank_tab.dart';
+import '../relationships/friend_finder_screen.dart';
+import '../relationships/relationships_screen.dart';
+import '../relationships/social_models.dart';
+import '../relationships/social_state.dart';
 import '../settings/change_password_screen.dart';
 import '../settings/settings_screen.dart';
 import 'auth_controller.dart';
@@ -22,8 +22,16 @@ import 'login_screen.dart';
 
 /// Điểm nối feature qua API công khai của khung app; không sửa core/router/theme.
 class AuthApplication extends StatefulWidget {
-  const AuthApplication({super.key, required this.dependencies});
+  const AuthApplication({
+    super.key,
+    required this.dependencies,
+    this.tabBuilders = const {},
+    this.protectedRoutes = const {},
+  });
   final AppDependencies dependencies;
+  final Map<AppTab, WidgetBuilder> tabBuilders;
+  final Map<String, WidgetBuilder> protectedRoutes;
+
   @override
   State<AuthApplication> createState() => _AuthApplicationState();
 }
@@ -64,7 +72,7 @@ class _AuthApplicationState extends State<AuthApplication> {
       AppTab.friends: (_) =>
           RelationshipsScreen(changes: _social, embedded: true),
       AppTab.questionBank: (_) => const QuestionBankTab(),
-      AppTab.profile: (_) => SettingsScreen(auth: _auth, embedded: true),
+      ...widget.tabBuilders,
     },
     protectedRoutes: {
       RelationshipRoutes.findFriends: (_) =>
@@ -108,6 +116,7 @@ class _AuthApplicationState extends State<AuthApplication> {
       SettingsRoutes.changePassword: (_) =>
           ChangePasswordScreen(repository: _repository),
       ...QuestionBankRoutes.routes,
+      ...widget.protectedRoutes,
     },
   );
 }
