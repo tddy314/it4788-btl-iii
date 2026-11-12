@@ -7,6 +7,7 @@ import '../../../core/widgets/app_states.dart';
 import '../controllers/conversations_controller.dart';
 import '../data/chat_repository.dart';
 import '../models/conversation_item.dart';
+import 'widgets/create_group_sheet.dart';
 import 'widgets/new_chat_sheet.dart';
 
 class ConversationsScreen extends StatefulWidget {
@@ -76,6 +77,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
     if (mounted) {
       await _controller?.refresh();
+    }
+  }
+
+  Future<void> _openCreateGroupSheet(BuildContext context) async {
+    final repo = _repository;
+    if (repo == null) return;
+    final conv = await showModalBottomSheet<ConversationItem>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          CreateGroupSheet(repository: repo, currentUserId: _currentUserId),
+    );
+    if (conv != null && mounted) {
+      await _navigateToConversation(conv);
     }
   }
 
@@ -164,6 +179,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           appBar: AppBar(
             title: const Text('Đoạn chat'),
             actions: [
+              IconButton(
+                tooltip: 'Tạo nhóm chat mới',
+                icon: const Icon(Icons.group_add_outlined),
+                onPressed: () => _openCreateGroupSheet(context),
+              ),
               IconButton(
                 tooltip: 'Cuộc trò chuyện mới',
                 icon: const Icon(Icons.edit_note_rounded),

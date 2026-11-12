@@ -375,6 +375,60 @@ class ChatDetailController extends ChangeNotifier {
     }
   }
 
+  // --- Gửi tin nhắn GIF ---
+
+  Future<void> sendGifMessage(String gifUrl) async {
+    final clientMsgId =
+        'gif_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
+
+    final tempMessage = ChatMessage(
+      messageId: '',
+      clientMsgId: clientMsgId,
+      conversationId: conversationId,
+      senderId: userId,
+      senderName: currentUserName,
+      content: '[GIF]',
+      messageType: MessageType.image,
+      mediaUrls: [gifUrl],
+      createdAt: DateTime.now(),
+      status: MessageStatus.sending,
+    );
+
+    _messages.insert(0, tempMessage);
+    notifyListeners();
+
+    try {
+      final stomp = repository.stomp;
+      if (stomp != null && !stomp.isConnected) {
+        await stomp.connect();
+        for (var i = 0; i < 25; i++) {
+          if (stomp.isConnected) break;
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
+
+      if (stomp != null && stomp.isConnected) {
+        repository.sendStompMessage(
+          conversationId: conversationId,
+          content: '[GIF]',
+          clientMsgId: clientMsgId,
+          mediaUrls: [gifUrl],
+        );
+        _markMessageStatus(clientMsgId, MessageStatus.sent);
+      } else {
+        _markMessageStatus(clientMsgId, MessageStatus.failed);
+      }
+
+      repository.saveCachedMessages(
+        userId: userId,
+        conversationId: conversationId,
+        messages: _messages,
+      );
+    } catch (_) {
+      _markMessageStatus(clientMsgId, MessageStatus.failed);
+    }
+  }
+
   // --- Gửi tin nhắn Ảnh ---
 
   Future<void> sendImageMessage(String imageFilePath) async {

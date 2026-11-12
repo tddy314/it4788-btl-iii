@@ -65,6 +65,33 @@ class ChatRepository {
     );
   }
 
+  // 2a. Tạo nhóm trò chuyện mới (tối thiểu 2 thành viên khác người tạo)
+  Future<ConversationItem> createGroupConversation({
+    required String name,
+    required List<String> memberIds,
+    String? avatarUrl,
+    String? currentUserId,
+  }) async {
+    final parsedIds = memberIds
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toList();
+
+    return api.request(
+      'conversations/group',
+      method: 'POST',
+      data: {
+        'name': name.trim(),
+        'member_ids': parsedIds,
+        if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatar_url': avatarUrl,
+      },
+      decode: (data) => ConversationItem.fromJson(
+        data as Map<String, dynamic>,
+        currentUserId: currentUserId,
+      ),
+    );
+  }
+
   // 2b. Lấy danh sách bạn bè để hiển thị và chọn nhắn tin nhanh
   Future<List<ChatPartnerSummary>> fetchFriendsForChat({int limit = 30}) async {
     return api.get(

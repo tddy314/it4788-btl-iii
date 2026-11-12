@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/widgets/app_network_image.dart';
 import '../../models/chat_message.dart';
@@ -49,6 +51,19 @@ class ChatMessageBubble extends StatelessWidget {
             ),
             Positioned(
               top: 40,
+              right: 70,
+              child: IconButton(
+                tooltip: 'Tải về máy',
+                icon: const Icon(
+                  Icons.download_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                onPressed: () => _downloadFile(context, url),
+              ),
+            ),
+            Positioned(
+              top: 40,
               right: 20,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white, size: 28),
@@ -59,6 +74,37 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _downloadFile(BuildContext context, String url) async {
+    try {
+      final dir =
+          await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final downloadsDir = Directory('${dir.path}/Downloads');
+      if (!downloadsDir.existsSync()) {
+        downloadsDir.createSync(recursive: true);
+      }
+      final cleanName = url.split('/').last.split('?').first;
+      final fileName =
+          'sqb_${DateTime.now().millisecondsSinceEpoch}_$cleanName';
+      final savePath = '${downloadsDir.path}/$fileName';
+
+      final dio = Dio();
+      await dio.download(url, savePath);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã tải thành công: $cleanName')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể tải tệp về thiết bị.')),
+        );
+      }
+    }
   }
 
   @override
@@ -180,18 +226,39 @@ class ChatMessageBubble extends StatelessWidget {
                       width: 220,
                       height: 180,
                     ),
-              Container(
-                margin: const EdgeInsets.all(6),
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.fullscreen,
-                  size: 16,
-                  color: Colors.white,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => _downloadFile(context, mediaUrl),
+                    child: Container(
+                      margin: const EdgeInsets.all(6),
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.download_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(right: 6, top: 6, bottom: 6),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.fullscreen,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

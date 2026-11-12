@@ -259,6 +259,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   onTextChanged: controller.onTextChanged,
                   onSendText: controller.sendTextMessage,
                   onPickImage: _pickAndSendImage,
+                  onSendGif: controller.sendGifMessage,
                 ),
             ],
           ),

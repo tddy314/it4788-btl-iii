@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'emoji_picker_sheet.dart';
+import 'gif_picker_sheet.dart';
 
 class ChatInputBar extends StatefulWidget {
   const ChatInputBar({
@@ -10,12 +11,14 @@ class ChatInputBar extends StatefulWidget {
     required this.onTextChanged,
     required this.onSendText,
     required this.onPickImage,
+    required this.onSendGif,
   });
 
   final String initialText;
   final ValueChanged<String> onTextChanged;
   final ValueChanged<String> onSendText;
   final VoidCallback onPickImage;
+  final ValueChanged<String> onSendGif;
 
   @override
   State<ChatInputBar> createState() => _ChatInputBarState();
@@ -78,6 +81,19 @@ class _ChatInputBarState extends State<ChatInputBar> {
     );
   }
 
+  void _showGifPicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return GifPickerSheet(onGifSelected: widget.onSendGif);
+      },
+    );
+  }
+
   @override
   void dispose() {
     _controller.removeListener(_onTextChanged);
@@ -118,6 +134,17 @@ class _ChatInputBarState extends State<ChatInputBar> {
                 color: theme.colorScheme.primary,
               ),
               onPressed: () => _showEmotePicker(context),
+            ),
+
+            // Nút chọn GIF động
+            IconButton(
+              tooltip: 'Gửi GIF',
+              icon: Icon(
+                Icons.gif_box_outlined,
+                color: theme.colorScheme.primary,
+                size: 26,
+              ),
+              onPressed: () => _showGifPicker(context),
             ),
 
             // Ô nhập nội dung
