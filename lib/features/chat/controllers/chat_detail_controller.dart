@@ -155,7 +155,26 @@ class ChatDetailController extends ChangeNotifier {
         conversationId,
         limit: 20,
       );
-      _messages = response.messages;
+
+      // Giữ lại các tin nhắn cục bộ đang gửi hoặc gửi thất bại chưa được server xác nhận
+      final pendingOrFailed = _messages
+          .where(
+            (m) =>
+                m.status == MessageStatus.sending ||
+                m.status == MessageStatus.failed,
+          )
+          .toList();
+
+      final serverIds = response.messages.map((m) => m.messageId).toSet();
+      final clientMsgIds = response.messages.map((m) => m.clientMsgId).toSet();
+
+      final unconfirmed = pendingOrFailed.where(
+        (m) =>
+            !serverIds.contains(m.messageId) &&
+            !clientMsgIds.contains(m.clientMsgId),
+      );
+
+      _messages = [...unconfirmed, ...response.messages];
       _after = response.after;
       _hasNext = response.hasNext;
       _errorMessage = null;
@@ -273,7 +292,16 @@ class ChatDetailController extends ChangeNotifier {
 
     // 4. Gửi qua STOMP WebSocket
     try {
-      if (repository.stomp != null && repository.stomp!.isConnected) {
+      final stomp = repository.stomp;
+      if (stomp != null && !stomp.isConnected) {
+        await stomp.connect();
+        for (var i = 0; i < 25; i++) {
+          if (stomp.isConnected) break;
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
+
+      if (stomp != null && stomp.isConnected) {
         repository.sendStompMessage(
           conversationId: conversationId,
           content: processedContent,
@@ -322,14 +350,26 @@ class ChatDetailController extends ChangeNotifier {
       final uploaded = await repository.uploadChatImage(imageFilePath);
 
       // 2. Gửi STOMP mang URL ảnh từ server
-      repository.sendStompMessage(
-        conversationId: conversationId,
-        content: '[Hình ảnh]',
-        clientMsgId: clientMsgId,
-        mediaUrls: [uploaded.url],
-      );
+      final stomp = repository.stomp;
+      if (stomp != null && !stomp.isConnected) {
+        await stomp.connect();
+        for (var i = 0; i < 25; i++) {
+          if (stomp.isConnected) break;
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
 
-      _markMessageStatus(clientMsgId, MessageStatus.sent);
+      if (stomp != null && stomp.isConnected) {
+        repository.sendStompMessage(
+          conversationId: conversationId,
+          content: '[Hình ảnh]',
+          clientMsgId: clientMsgId,
+          mediaUrls: [uploaded.url],
+        );
+        _markMessageStatus(clientMsgId, MessageStatus.sent);
+      } else {
+        _markMessageStatus(clientMsgId, MessageStatus.failed);
+      }
     } catch (_) {
       _markMessageStatus(clientMsgId, MessageStatus.failed);
     }
@@ -349,7 +389,12 @@ class ChatDetailController extends ChangeNotifier {
       sendImageMessage(failedMessage.mediaUrls.first);
     } else {
       try {
-        if (repository.stomp != null && repository.stomp!.isConnected) {
+        final stomp = repository.stomp;
+        if (stomp != null && !stomp.isConnected) {
+          stomp.connect();
+        }
+
+        if (stomp != null && stomp.isConnected) {
           repository.sendStompMessage(
             conversationId: conversationId,
             content: failedMessage.content,

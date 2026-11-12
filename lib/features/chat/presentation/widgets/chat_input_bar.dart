@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../utils/chat_emote_converter.dart';
 
@@ -22,25 +23,16 @@ class ChatInputBar extends StatefulWidget {
 
 class _ChatInputBarState extends State<ChatInputBar> {
   late final TextEditingController _controller;
-  bool _canSend = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText);
-    _canSend = _controller.text.trim().isNotEmpty;
     _controller.addListener(_onTextChanged);
   }
 
   void _onTextChanged() {
-    final text = _controller.text;
-    final canSend = text.trim().isNotEmpty;
-    if (_canSend != canSend) {
-      setState(() {
-        _canSend = canSend;
-      });
-    }
-    widget.onTextChanged(text);
+    widget.onTextChanged(_controller.text);
   }
 
   void _handleSend() {
@@ -50,23 +42,23 @@ class _ChatInputBarState extends State<ChatInputBar> {
     _controller.clear();
   }
 
-  void _insertEmote(String emoteKey) {
+  void _insertEmote(String emote) {
     final current = _controller.text;
     final selection = _controller.selection;
     if (selection.isValid && selection.start >= 0) {
       final newText = current.replaceRange(
         selection.start,
         selection.end,
-        emoteKey,
+        emote,
       );
       _controller.value = TextEditingValue(
         text: newText,
         selection: TextSelection.collapsed(
-          offset: selection.start + emoteKey.length,
+          offset: selection.start + emote.length,
         ),
       );
     } else {
-      _controller.text = '$current$emoteKey ';
+      _controller.text = '$current$emote ';
       _controller.selection = TextSelection.collapsed(
         offset: _controller.text.length,
       );
@@ -74,44 +66,70 @@ class _ChatInputBarState extends State<ChatInputBar> {
   }
 
   void _showEmotePicker(BuildContext context) {
+    final uniqueEmojis = ChatEmoteConverter.emoteMap.values.toSet().toList();
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: SizedBox(
+            height: mediaQuery.size.height * 0.42,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Biểu tượng cảm xúc (Ký tự đặc biệt)',
-                  style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Biểu tượng cảm xúc',
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  children: ChatEmoteConverter.emoteMap.entries.map((entry) {
-                    return ActionChip(
-                      avatar: Text(
-                        entry.value,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                      label: Text(
-                        entry.key,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: () {
-                        _insertEmote(entry.key);
-                        Navigator.of(context).pop();
-                      },
-                    );
-                  }).toList(),
+                const Divider(height: 1),
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 6,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 1.1,
+                        ),
+                    itemCount: uniqueEmojis.length,
+                    itemBuilder: (context, index) {
+                      final emoji = uniqueEmojis[index];
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () {
+                          _insertEmote(emoji);
+                          Navigator.of(context).pop();
+                        },
+                        child: Center(
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 26),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -171,18 +189,31 @@ class _ChatInputBarState extends State<ChatInputBar> {
                   color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: TextField(
-                  controller: _controller,
-                  maxLines: 4,
-                  minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    hintText: 'Nhập tin nhắn…',
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                child: Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter &&
+                        !HardwareKeyboard.instance.isShiftPressed) {
+                      _handleSend();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    controller: _controller,
+                    maxLines: 4,
+                    minLines: 1,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.send,
+                    textCapitalization: TextCapitalization.none,
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập tin nhắn…',
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    onSubmitted: (_) => _handleSend(),
                   ),
-                  onSubmitted: (_) => _handleSend(),
                 ),
               ),
             ),
@@ -190,15 +221,21 @@ class _ChatInputBarState extends State<ChatInputBar> {
             const SizedBox(width: 4),
 
             // Nút gửi
-            IconButton(
-              tooltip: 'Gửi',
-              icon: Icon(
-                Icons.send_rounded,
-                color: _canSend
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outline.withValues(alpha: 0.5),
-              ),
-              onPressed: _canSend ? _handleSend : null,
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _controller,
+              builder: (context, value, _) {
+                final canSend = value.text.trim().isNotEmpty;
+                return IconButton(
+                  tooltip: 'Gửi',
+                  icon: Icon(
+                    Icons.send_rounded,
+                    color: canSend
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline.withValues(alpha: 0.5),
+                  ),
+                  onPressed: canSend ? _handleSend : null,
+                );
+              },
             ),
           ],
         ),
