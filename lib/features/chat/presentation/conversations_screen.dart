@@ -282,33 +282,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          AppAvatar(
-                            imageUrl: friend.avatarUrl,
-                            name: friend.fullName,
-                            size: 48,
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              width: 13,
-                              height: 13,
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF31A24C,
-                                ), // Messenger online green
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: theme.colorScheme.surface,
-                                  width: 2.2,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      AppAvatar(
+                        imageUrl: friend.avatarUrl,
+                        name: friend.fullName,
+                        size: 48,
                       ),
                       const SizedBox(height: 6),
                       Text(
