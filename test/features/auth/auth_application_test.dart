@@ -51,6 +51,8 @@ void main() {
       expect(find.byType(AppShell), findsOneWidget);
       await tester.tap(find.text('Cá nhân'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Cài đặt'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Đổi mật khẩu'));
       await tester.pumpAndSettle();
       expect(find.byType(ChangePasswordScreen), findsOneWidget);

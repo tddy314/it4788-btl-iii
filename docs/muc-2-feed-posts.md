@@ -1,6 +1,6 @@
 # Mục 2 — Bảng tin và bài viết
 
-Cập nhật 07/11/2026. Đã nối phần 2 vào tab Bảng tin sau đăng nhập. Phần kiểm chứng trên thiết bị nằm ở cuối tài liệu.
+Cập nhật 14/11/2026. Đã nối phần 2 vào tab Bảng tin sau đăng nhập. Phần kiểm chứng trên thiết bị nằm ở cuối tài liệu.
 
 ## Phạm vi và nguồn
 
@@ -26,7 +26,7 @@ Cập nhật 07/11/2026. Đã nối phần 2 vào tab Bảng tin sau đăng nh�
 
 - `features/feed`: DTO sự kiện, repository và màn bảng tin.
 - `features/posts`: DTO/repository, phân trang có cache tùy chọn, card/chi tiết, soạn bài/controller, media service/viewer, danh sách bài của tôi/video, bình luận và báo cáo.
-- Chỉ gắn thêm builder feed trong `features/auth/auth_application.dart` (điểm composition đã được nhóm quy định). Không sửa implementation app/core/theme.
+- Sau khi đồng bộ main ngày 14/11, gắn builder feed và `PostRoutes.routes` qua API công khai của `AuthApplication` tại `main.dart`. Giữ nguyên AuthApplication mới của nhóm, implementation app/core/theme và các builder/route phần 3–5.
 - Tái sử dụng ApiClient, SessionStore, JsonCache, DraftStore, AppNetworkImage/AppAvatar và widget trạng thái/theme.
 - Thêm image_picker 1.2.4, video_player 2.14.1, path_provider 2.1.6. Media adapter trong feature dùng ApiClient vì wrapper upload chung chưa có tham số MIME multipart; không thay core.
 - Cache giới hạn 40 mục/record và 512 KiB, tối đa 200 mục RAM; theo user. GET lỗi mạng giữ dữ liệu, 401/403/404 bỏ dữ liệu và cache. Draft secure theo user; file nháp trong application support riêng theo user.
