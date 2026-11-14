@@ -1,9 +1,13 @@
-name: Build Android Debug APK (feat5)
+name: Analyze, Test and Build Android APK
 
 on:
   push:
     branches:
       - feat5
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -30,7 +34,7 @@ jobs:
           cache: true
 
       - name: Get Flutter dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Run Flutter analyze
         run: flutter analyze --no-pub

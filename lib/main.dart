@@ -6,7 +6,9 @@ import 'app/app_shell.dart';
 import 'core/widgets/app_states.dart';
 import 'features/auth/auth_application.dart';
 import 'features/chat/chat_feature.dart';
+import 'features/feed/feed_screen.dart';
 import 'features/notifications/notifications_feature.dart';
+import 'features/posts/post_routes.dart';
 import 'features/settings/presentation/push_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 
@@ -48,8 +50,12 @@ class _AppBootstrapState extends State<AppBootstrap> {
       if (snapshot.hasData) {
         return AuthApplication(
           dependencies: snapshot.requireData,
-          tabBuilders: {AppTab.notifications: (_) => const NotificationsTab()},
+          tabBuilders: {
+            AppTab.feed: (_) => const FeedScreen(),
+            AppTab.notifications: (_) => const NotificationsTab(),
+          },
           protectedRoutes: {
+            ...PostRoutes.routes,
             '/conversations': (_) => const ConversationsScreen(),
             '/chat': (_) => const ChatDetailScreen(),
             SettingsRoutes.pushSettings: (_) => const PushSettingsScreen(),

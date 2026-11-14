@@ -78,13 +78,21 @@
 
 ---
 
-## 3. Hiện trạng codebase — Cập nhật 12/11/2026
+## 3. Hiện trạng codebase — Cập nhật 14/11/2026
 
 - **Mục 1 (`features/auth`, `features/settings`):** Đã có màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai. Đã sửa mã thành công mặc định trong `AppConfig` thành **`1000`** theo response server thật. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:.
 - **Mục 4 (`features/profile`, `features/relationships` — cập nhật 04/11):** Đã nối tab Cá nhân (`ProfileScreen`) và tab Bạn bè (`RelationshipsScreen`, `FriendFinderScreen` tìm người qua `GET search?type=USER`), có danh sách chặn, `SocialChanges`/`SocialLease` vô hiệu dữ liệu khi quan hệ thay đổi, route `ProfileRoutes.user` (`/profile/user`). Xem [bàn giao hồ sơ và quan hệ](docs/module-ho-so-quan-he.md).
 - **Mục 3 (`features/question_bank` — cập nhật 10/11):** Đã nối `AppTab.questionBank` (`QuestionBankTab`) và `QuestionBankRoutes.routes` (`/question-bank/compose`, `/question-bank/submission`, `/question-bank/practice`, `/question-bank/ratings`). Xem [bàn giao mục 3](docs/muc-3-question-bank.md).
 - **Mục 5 (`features/notifications`, `features/chat`, `features/settings` trên nhánh `feat5`):** Đã nối `AppTab.notifications` (`NotificationsTab`), `/conversations` (`ConversationsScreen`), `/chat` (`ChatDetailScreen`), `SettingsRoutes.pushSettings` (`/settings/push`), cùng GitHub Actions workflow build APK debug. Đã đối chiếu OpenAPI trực tiếp ngày 12/11/2026.
-- **Chưa có:** `features/feed`, `features/posts` (chờ thành viên 2 merge).
+- **Mục 2 (`features/feed`, `features/posts`):** Bảng tin, bài của tôi, soạn/sửa/xóa bài, Like, bình luận, báo cáo và ảnh/video. Gắn `FeedScreen` qua `AuthApplication.tabBuilders` tại `main.dart`; `PostRoutes.routes` đăng ký `/posts/detail`, nhận `{'postId': id}` từ thông báo, hoặc ID nguyên/chuỗi. Route kiểm tra ID và dùng cơ chế bảo vệ phiên chung. Xem [bàn giao mục 2](docs/muc-2-feed-posts.md).
+
+### Lưu ý tích hợp phần 2
+
+- Giữ builder/route của các thành viên khác; không khôi phục tab Cá nhân tạm của nhánh feat2 cũ. Không sửa implementation `app/core` để ghép feed.
+- Giữ `shared_preferences_android` 2.5.4 hoặc bản tương thích có sửa lỗi R8/JNI. Bản 2.5.1 đã làm cache lỗi trên APK release dù unit test đạt. Giữ dependency video_player cho trình phát video.
+- Feed cache theo tài khoản, tối đa 40 mục/512 KiB trên đĩa và 200 mục RAM. Chỉ lưu bài PUBLIC cùng trường hiển thị sự kiện. Bản nháp media dùng tệp bền vững và dấu chủ sở hữu picker để tránh khôi phục nhầm tài khoản.
+- Backend có thể giữ sự kiện CREATED_POST sau khi xóa bài. Phải kiểm tra chi tiết, lọc 403/404 và vẫn cho tải trang kế tiếp khi trang hiện tại bị lọc hết. Không replay thao tác ghi sau timeout; cần đối soát trước khi thử lại.
+- Đã kiểm tra backend thật và Android ảo ngày 05–07/11: đăng ảnh/video, phát video, Like, bình luận, sửa/xóa; tắt toàn bộ mạng rồi force-stop/mở lại vẫn thấy bài và ảnh cache. Dữ liệu thử đã dọn. Kết quả kiểm thử tích hợp ngày 14/11 ghi riêng trong bàn giao; không coi các lần kiểm tra trước là nghiệm thu bản merge hoặc điện thoại vật lý.
 
 ---
 
