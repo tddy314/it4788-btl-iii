@@ -6,6 +6,7 @@ import '../../core/errors/app_failure.dart';
 import '../../core/storage/cached_resource_controller.dart';
 import '../../core/widgets/app_states.dart';
 import 'question_bank_repository.dart';
+import 'question_bank_cache.dart';
 import 'question_bank_routes.dart';
 import 'question_bank_widgets.dart';
 import 'question_models.dart';
@@ -32,7 +33,10 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
     final dependencies = AppScope.of(context);
     _repository = QuestionBankRepository(dependencies.api);
     _controller = CachedResourceController<SubmissionDetail>(
-      cache: dependencies.cache,
+      cache: QuestionBankCache(
+        drafts: dependencies.drafts,
+        legacy: dependencies.cache,
+      ),
       userId: dependencies.session.tokens?.userId ?? '',
       resource: 'qb.submission.${widget.sessionId}',
       fetch: () =>

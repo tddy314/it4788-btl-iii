@@ -36,6 +36,8 @@ class PushSettings {
     required this.vibrationEnabled,
     this.soundType =
         'default', // 'default' hoặc 'voice' theo yêu cầu Slide 26 & 29
+    this.otherCategories = const {},
+    this.quietHours,
   });
 
   final bool pushEnabled;
@@ -45,6 +47,8 @@ class PushSettings {
   final bool soundEnabled;
   final bool vibrationEnabled;
   final String soundType;
+  final Map<String, dynamic> otherCategories;
+  final Map<String, dynamic>? quietHours;
 
   PushSettings copyWith({
     bool? pushEnabled,
@@ -62,6 +66,8 @@ class PushSettings {
     soundEnabled: soundEnabled ?? this.soundEnabled,
     vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
     soundType: soundType ?? this.soundType,
+    otherCategories: otherCategories,
+    quietHours: quietHours,
   );
 
   factory PushSettings.defaults() => const PushSettings(
@@ -115,12 +121,27 @@ class PushSettings {
       soundEnabled: parseBool(json['sound_enabled'] ?? true),
       vibrationEnabled: parseBool(json['vibration_enabled'] ?? true),
       soundType: json['sound_type'] as String? ?? 'default',
+      otherCategories: Map<String, dynamic>.from(categories)
+        ..removeWhere(
+          (key, _) => const [
+            'SOCIAL',
+            'ACADEMIC',
+            'SYSTEM',
+            'social',
+            'academic',
+            'system',
+          ].contains(key),
+        ),
+      quietHours: json['quiet_hours'] is Map<String, dynamic>
+          ? json['quiet_hours'] as Map<String, dynamic>
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'push_enabled': pushEnabled,
     'categories': {
+      ...otherCategories,
       'SOCIAL': social.toJson(),
       'ACADEMIC': academic.toJson(),
       'SYSTEM': system.toJson(),
@@ -128,5 +149,9 @@ class PushSettings {
     'sound_enabled': soundEnabled,
     'vibration_enabled': vibrationEnabled,
     'sound_type': soundType,
+    if (quietHours != null) 'quiet_hours': quietHours,
   };
+
+  /// Voice selection is local Android configuration, not a Swagger field.
+  Map<String, dynamic> toServerJson() => toJson()..remove('sound_type');
 }

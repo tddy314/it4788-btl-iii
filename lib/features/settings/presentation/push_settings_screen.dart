@@ -1,240 +1,248 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/app_scope.dart';
 import '../../../core/widgets/app_states.dart';
+import '../../notifications/push/push_coordinator.dart';
 import '../data/push_settings_repository.dart';
-import '../models/push_settings.dart';
+import '../notification_sound_controller.dart';
+import '../push_settings_controller.dart';
 
 class PushSettingsScreen extends StatefulWidget {
   const PushSettingsScreen({super.key});
-
   @override
   State<PushSettingsScreen> createState() => _PushSettingsScreenState();
 }
 
-class _PushSettingsScreenState extends State<PushSettingsScreen> {
-  PushSettingsRepository? _repository;
-  PushSettings _settings = PushSettings.defaults();
-  bool _isLoading = true;
-  String? _userId;
-
+class _PushSettingsScreenState extends State<PushSettingsScreen>
+    with WidgetsBindingObserver {
+  PushSettingsController? _settings;
+  NotificationSoundController? _sound;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_repository == null) {
-      final deps = AppScope.of(context);
-      _userId = deps.session.tokens?.userId ?? 'anonymous';
-      _repository = PushSettingsRepository(api: deps.api, cache: deps.cache);
-      _loadSettings();
+    if (_settings != null) return;
+    final deps = AppScope.of(context),
+        id = AppScope.of(context).session.tokens!.userId;
+    bool current() => mounted && deps.session.tokens?.userId == id;
+    _settings = PushSettingsController(
+      PushSettingsRepository(api: deps.api, cache: deps.cache),
+      id,
+      current,
+    )..load();
+    _sound = NotificationSoundController(deps.drafts, id, current)..load();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && _sound?.recording == true) {
+      unawaited(_sound?.stop());
     }
   }
 
-  Future<void> _loadSettings() async {
-    // 1. Đọc từ cache trước
-    if (_userId != null) {
-      final cached = await _repository?.loadCached(_userId!);
-      if (cached != null && mounted) {
-        setState(() {
-          _settings = cached;
-        });
-      }
-    }
-
-    // 2. Fetch server
-    try {
-      final remote = await _repository?.fetchSettings();
-      if (remote != null && mounted) {
-        setState(() {
-          _settings = remote;
-          _isLoading = false;
-        });
-        if (_userId != null) {
-          await _repository?.saveToCache(_userId!, remote);
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _update(PushSettings newSettings) async {
-    final oldSettings = _settings;
-    setState(() => _settings = newSettings);
-
-    try {
-      final updated = await _repository?.updateSettings(newSettings);
-      if (updated != null && mounted) {
-        setState(() => _settings = updated);
-        if (_userId != null) {
-          await _repository?.saveToCache(_userId!, updated);
-        }
-      }
-    } catch (_) {
-      // Rollback nếu có lỗi
-      if (mounted) {
-        setState(() => _settings = oldSettings);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không thể cập nhật cài đặt. Vui lòng thử lại.'),
-          ),
-        );
-      }
-    }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _settings?.dispose();
+    _sound?.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Cài đặt thông báo')),
-      body: _isLoading
-          ? const AppLoadingState(message: 'Đang tải cài đặt…')
-          : ListView(
+    final c = _settings!, sound = _sound!, push = PushScope.maybeOf(context);
+    return ListenableBuilder(
+      listenable: Listenable.merge([c, sound, ?push]),
+      builder: (context, _) {
+        final settings = c.settings;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Cài đặt thông báo'),
+            actions: [
+              IconButton(
+                tooltip: 'Tải lại',
+                onPressed: c.loading || c.saving ? null : c.load,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          body: PopScope(
+            canPop: !sound.recording && !sound.busy,
+            onPopInvokedWithResult: (didPop, result) async {
+              if (!didPop && !sound.busy && sound.recording) await sound.stop();
+            },
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
               children: [
-                // Công tắc tổng thể
-                SwitchListTile(
-                  secondary: const Icon(Icons.notifications_active_outlined),
-                  title: const Text(
-                    'Cho phép thông báo đẩy',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text('Nhận thông báo khi có tương tác mới'),
-                  value: _settings.pushEnabled,
-                  onChanged: (val) {
-                    _update(_settings.copyWith(pushEnabled: val));
-                  },
-                ),
-                const Divider(),
-
-                if (_settings.pushEnabled) ...[
-                  // Danh mục thông báo
+                if (c.loading || c.saving) const LinearProgressIndicator(),
+                if (c.message != null)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text(
-                      'Chuyên mục thông báo',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    padding: const EdgeInsets.all(16),
+                    child: Text(c.message!),
+                  ),
+                if (c.fromCache)
+                  const ListTile(
+                    leading: Icon(Icons.offline_bolt_outlined),
+                    title: Text(
+                      'Đang xem cài đặt đã lưu. Kết nối mạng và tải lại để chỉnh sửa.',
                     ),
                   ),
+                if (settings == null && !c.loading)
+                  AppErrorState(
+                    message: 'Chưa tải được cài đặt thông báo.',
+                    onRetry: c.load,
+                  ),
+                if (settings != null) ...[
                   SwitchListTile(
-                    title: const Text('Mạng xã hội & Tin nhắn'),
-                    subtitle: const Text(
-                      'Thông báo khi có người nhắn tin, like hoặc bình luận',
-                    ),
-                    value: _settings.social.enabled,
-                    onChanged: (val) {
-                      _update(
-                        _settings.copyWith(
-                          social: _settings.social.copyWith(enabled: val),
-                        ),
-                      );
-                    },
+                    title: const Text('Cho phép thông báo đẩy'),
+                    secondary: const Icon(Icons.notifications_active_outlined),
+                    value: settings.pushEnabled,
+                    onChanged: c.writable
+                        ? (v) => c.update(settings.copyWith(pushEnabled: v))
+                        : null,
                   ),
-                  SwitchListTile(
-                    title: const Text('Ngân hàng câu hỏi'),
-                    subtitle: const Text(
-                      'Thông báo khi bộ câu hỏi được duyệt hoặc có phản hồi',
-                    ),
-                    value: _settings.academic.enabled,
-                    onChanged: (val) {
-                      _update(
-                        _settings.copyWith(
-                          academic: _settings.academic.copyWith(enabled: val),
-                        ),
-                      );
-                    },
-                  ),
-                  SwitchListTile(
-                    title: const Text('Hệ thống'),
-                    subtitle: const Text(
-                      'Thông báo bảo mật và phiên đăng nhập',
-                    ),
-                    value: _settings.system.enabled,
-                    onChanged: (val) {
-                      _update(
-                        _settings.copyWith(
-                          system: _settings.system.copyWith(enabled: val),
-                        ),
-                      );
-                    },
-                  ),
-
-                  const Divider(),
-
-                  // Âm thanh và rung
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text(
-                      'Hiệu ứng thông báo',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Phát âm thanh'),
-                    secondary: const Icon(Icons.volume_up_outlined),
-                    value: _settings.soundEnabled,
-                    onChanged: (val) {
-                      _update(_settings.copyWith(soundEnabled: val));
-                    },
-                  ),
-                  SwitchListTile(
-                    title: const Text('Rung khi có thông báo'),
-                    secondary: const Icon(Icons.vibration_outlined),
-                    value: _settings.vibrationEnabled,
-                    onChanged: (val) {
-                      _update(_settings.copyWith(vibrationEnabled: val));
-                    },
-                  ),
-
-                  if (_settings.soundEnabled) ...[
+                  if (settings.pushEnabled) ...[
                     const Divider(),
-                    // Tùy chọn âm thanh theo yêu cầu riêng môn IT4788 (Slide 26 & 29)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                      child: Text(
-                        'Kiểu âm thanh thông báo (Yêu cầu IT4788)',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    SwitchListTile(
+                      title: const Text('Mạng xã hội và tin nhắn'),
+                      value: settings.social.enabled,
+                      onChanged: c.writable
+                          ? (v) => c.update(
+                              settings.copyWith(
+                                social: settings.social.copyWith(enabled: v),
+                              ),
+                            )
+                          : null,
                     ),
-                    RadioGroup<String>(
-                      groupValue: _settings.soundType,
-                      onChanged: (val) {
-                        if (val != null) {
-                          _update(_settings.copyWith(soundType: val));
-                        }
-                      },
-                      child: const Column(
-                        children: [
-                          RadioListTile<String>(
-                            title: Text('Âm thanh mặc định'),
-                            subtitle: Text('Tiếng chuông ngân vang hệ thống'),
-                            value: 'default',
-                          ),
-                          RadioListTile<String>(
-                            title: Text('Giọng nói phát ra (Thu âm đặc trưng)'),
-                            subtitle: Text(
-                              'Phát file âm thanh giọng nói của nhóm sinh viên',
-                            ),
-                            value: 'voice',
-                          ),
-                        ],
-                      ),
+                    SwitchListTile(
+                      title: const Text('Ngân hàng câu hỏi'),
+                      value: settings.academic.enabled,
+                      onChanged: c.writable
+                          ? (v) => c.update(
+                              settings.copyWith(
+                                academic: settings.academic.copyWith(
+                                  enabled: v,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                    SwitchListTile(
+                      title: const Text('Hệ thống'),
+                      value: settings.system.enabled,
+                      onChanged: c.writable
+                          ? (v) => c.update(
+                              settings.copyWith(
+                                system: settings.system.copyWith(enabled: v),
+                              ),
+                            )
+                          : null,
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text('Phát âm thanh'),
+                      secondary: const Icon(Icons.volume_up_outlined),
+                      value: settings.soundEnabled,
+                      onChanged: c.writable
+                          ? (v) => c.update(settings.copyWith(soundEnabled: v))
+                          : null,
+                    ),
+                    SwitchListTile(
+                      title: const Text('Rung khi có thông báo'),
+                      secondary: const Icon(Icons.vibration_outlined),
+                      value: settings.vibrationEnabled,
+                      onChanged: c.writable
+                          ? (v) =>
+                                c.update(settings.copyWith(vibrationEnabled: v))
+                          : null,
                     ),
                   ],
                 ],
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Âm thanh trên thiết bị này',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                RadioGroup<String>(
+                  groupValue: sound.mode,
+                  onChanged: (v) {
+                    if (sound.busy || sound.recording) return;
+                    if (v != null) unawaited(sound.choose(v));
+                  },
+                  child: const Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: Text('Âm thanh mặc định'),
+                        value: 'default',
+                      ),
+                      RadioListTile<String>(
+                        title: Text('Giọng nói đã thu'),
+                        value: 'voice',
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: sound.busy
+                            ? null
+                            : sound.recording
+                            ? sound.stop
+                            : sound.start,
+                        icon: Icon(sound.recording ? Icons.stop : Icons.mic),
+                        label: Text(
+                          sound.recording
+                              ? 'Dừng và lưu'
+                              : 'Thu âm (tối đa 15 giây)',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: sound.busy || sound.recording
+                            ? null
+                            : sound.preview,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Nghe thử'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (sound.message != null)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(sound.message!),
+                  ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.phone_android),
+                  title: const Text('Nhận thông báo trên điện thoại'),
+                  subtitle: Text(
+                    push?.status ??
+                        'Thông báo đẩy chưa được cấu hình cho bản cài đặt này.',
+                  ),
+                ),
+                if (push?.configured == true)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: OutlinedButton(
+                      onPressed: push!.busy ? null : push.enable,
+                      child: const Text('Kiểm tra và cấp quyền thông báo'),
+                    ),
+                  ),
               ],
             ),
+          ),
+        );
+      },
     );
   }
 }

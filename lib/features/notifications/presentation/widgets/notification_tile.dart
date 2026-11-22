@@ -25,10 +25,13 @@ class NotificationTile extends StatelessWidget {
 
   IconData _iconForType(String type) => switch (type.toUpperCase()) {
     'POST_LIKE' || 'LIKE' => Icons.thumb_up_alt_rounded,
-    'POST_COMMENT' || 'COMMENT' => Icons.chat_bubble_outline_rounded,
+    'NEW_COMMENT' ||
+    'POST_COMMENT' ||
+    'COMMENT' => Icons.chat_bubble_outline_rounded,
     'SESSION_APPROVED' ||
     'SESSION_REJECTED' ||
-    'QUESTION_SESSION' => Icons.school_outlined,
+    'QUESTION_SESSION' ||
+    'QUESTION_APPROVED' => Icons.school_outlined,
     'FRIEND_REQUEST' || 'FRIEND_ACCEPT' => Icons.person_add_outlined,
     'NEW_MESSAGE' || 'CHAT' => Icons.mail_outline_rounded,
     _ => Icons.notifications_none_rounded,
@@ -37,11 +40,11 @@ class NotificationTile extends StatelessWidget {
   Color _iconColorForType(BuildContext context, String type) {
     final theme = Theme.of(context);
     return switch (type.toUpperCase()) {
-      'POST_LIKE' || 'LIKE' => Colors.blue,
-      'POST_COMMENT' || 'COMMENT' => Colors.green,
-      'SESSION_APPROVED' => Colors.teal,
-      'SESSION_REJECTED' => Colors.redAccent,
-      'FRIEND_REQUEST' || 'FRIEND_ACCEPT' => Colors.orange,
+      'NEW_COMMENT' ||
+      'POST_COMMENT' ||
+      'COMMENT' => theme.colorScheme.secondary,
+      'SESSION_APPROVED' || 'QUESTION_APPROVED' => theme.colorScheme.tertiary,
+      'SESSION_REJECTED' || 'MODERATION_NOTICE' => theme.colorScheme.error,
       'NEW_MESSAGE' || 'CHAT' => theme.colorScheme.primary,
       _ => theme.colorScheme.primary,
     };
@@ -56,7 +59,7 @@ class NotificationTile extends StatelessWidget {
     return Material(
       color: isUnread
           ? theme.colorScheme.primaryContainer.withValues(alpha: 0.25)
-          : Colors.transparent,
+          : theme.colorScheme.surface,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -83,7 +86,9 @@ class NotificationTile extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
+                            color: theme.colorScheme.shadow.withValues(
+                              alpha: 0.1,
+                            ),
                             blurRadius: 4,
                           ),
                         ],

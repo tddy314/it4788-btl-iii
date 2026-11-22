@@ -212,6 +212,12 @@ class _EditProfileScreenState extends State<EditProfileScreen>
         targetHeight: 512,
       );
       try {
+        if (codec.frameCount != 1) {
+          throw const AppFailure(
+            FailureKind.rejected,
+            'Không hỗ trợ ảnh động. Hãy chọn ảnh tĩnh.',
+          );
+        }
         final frame = await codec.getNextFrame();
         frame.image.dispose();
       } finally {

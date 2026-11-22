@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../../core/errors/app_failure.dart';
 import '../../core/validation/validators.dart';
+import '../../core/text/emote_converter.dart';
 import 'post_models.dart';
 
 class PostsRepository {
@@ -28,12 +29,18 @@ class PostsRepository {
     CancelToken? cancel,
   }) {
     validatePost(content, media);
+    if (media.any((m) => m.type != 'IMAGE')) {
+      throw const AppFailure(
+        FailureKind.rejected,
+        'Bài viết cá nhân chỉ nhận ảnh tĩnh.',
+      );
+    }
     return api.request(
       'posts',
       method: 'POST',
       cancelToken: cancel,
       data: {
-        'content': content.trim(),
+        'content': EmoteConverter.convert(content.trim()),
         'media_urls': media.map((e) => e.toJson()).toList(),
         'visibility': 'PUBLIC',
         'post_type': 'SOCIAL_POST',
@@ -54,7 +61,7 @@ class PostsRepository {
       method: 'PUT',
       cancelToken: cancel,
       data: {
-        'content': content.trim(),
+        'content': EmoteConverter.convert(content.trim()),
         'media_urls': media.map((e) => e.toJson()).toList(),
         'visibility': 'PUBLIC',
       },
@@ -115,7 +122,7 @@ class PostsRepository {
       data: {
         'target_type': 'POST',
         'target_id': id,
-        'content': content.trim(),
+        'content': EmoteConverter.convert(content.trim()),
         'parent_comment_id': ?parent,
       },
       decode: PostComment.fromJson,
@@ -163,7 +170,7 @@ class PostsRepository {
     if (content.trim().isEmpty && media.isEmpty) {
       throw const AppFailure(
         FailureKind.rejected,
-        'Nhập nội dung hoặc chọn ảnh/video cho bài viết.',
+        'Nhập nội dung hoặc chọn ảnh cho bài viết.',
       );
     }
     if (media.any((m) => !['IMAGE', 'VIDEO'].contains(m.type)) ||

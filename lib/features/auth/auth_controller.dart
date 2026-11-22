@@ -8,7 +8,12 @@ import 'auth_validation.dart';
 
 /// Sống cùng app, không cùng màn login. Không lưu password hoặc log token.
 class AuthController extends ChangeNotifier {
-  AuthController({required this.repository, required this.session});
+  AuthController({
+    required this.repository,
+    required this.session,
+    this.beforeLogout,
+  });
+  final Future<void> Function()? beforeLogout;
   final AuthRepository repository;
   final SessionStore session;
   bool busy = false;
@@ -65,6 +70,11 @@ class AuthController extends ChangeNotifier {
     message = null;
     notifyListeners();
     var serverConfirmed = false;
+    try {
+      await beforeLogout?.call();
+    } catch (_) {
+      /* Local logout still proceeds. */
+    }
     try {
       await repository.logout();
       serverConfirmed = true;

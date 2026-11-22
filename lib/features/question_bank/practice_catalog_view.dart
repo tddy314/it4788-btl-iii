@@ -6,6 +6,7 @@ import '../../app/app_scope.dart';
 import '../../core/storage/cached_resource_controller.dart';
 import 'paged_list_controller.dart';
 import 'question_bank_repository.dart';
+import 'question_bank_cache.dart';
 import 'question_bank_routes.dart';
 import 'question_bank_widgets.dart';
 import 'question_models.dart';
@@ -38,7 +39,10 @@ class _PracticeCatalogViewState extends State<PracticeCatalogView>
     final userId = dependencies.session.tokens?.userId ?? '';
     _repository = QuestionBankRepository(dependencies.api);
     _subjects = CachedResourceController<List<SubjectItem>>(
-      cache: dependencies.cache,
+      cache: QuestionBankCache(
+        drafts: dependencies.drafts,
+        legacy: dependencies.cache,
+      ),
       userId: userId,
       resource: 'qb.subjects',
       fetch: () => _repository.subjects(),
@@ -50,7 +54,10 @@ class _PracticeCatalogViewState extends State<PracticeCatalogView>
     _controller = PagedListController<PracticeSetSummary>(
       fetch: _fetcher(),
       idOf: (item) => item.sessionId,
-      cache: dependencies.cache,
+      cache: QuestionBankCache(
+        drafts: dependencies.drafts,
+        legacy: dependencies.cache,
+      ),
       userId: userId,
       encode: (item) => item.toJson(),
       decode: PracticeSetSummary.fromJson,

@@ -7,7 +7,6 @@ import '../../../core/widgets/app_states.dart';
 import '../controllers/conversations_controller.dart';
 import '../data/chat_repository.dart';
 import '../models/conversation_item.dart';
-import 'widgets/create_group_sheet.dart';
 import 'widgets/new_chat_sheet.dart';
 
 class ConversationsScreen extends StatefulWidget {
@@ -39,12 +38,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         api: deps.api,
         cache: deps.cache,
         mediaUploadService: deps.mediaUpload,
+        privateStore: deps.drafts,
+        wsUrl: Uri.parse(deps.config.normalizedBaseUrl)
+            .resolve('ws')
+            .replace(scheme: 'wss')
+            .toString(),
       );
       _repository = repository;
 
       _controller = ConversationsController(
         repository: repository,
         userId: _currentUserId,
+        isCurrent: () => repository.isActive,
       )..initialize();
 
       _scrollController.addListener(_onScroll);
@@ -63,10 +68,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     _scrollController.dispose();
     _searchController.dispose();
     _controller?.dispose();
+    _repository?.dispose();
     super.dispose();
   }
 
   Future<void> _navigateToConversation(ConversationItem conv) async {
+    _repository?.stomp?.disconnect();
     await Navigator.of(context).pushNamed(
       '/chat',
       arguments: {
@@ -77,20 +84,6 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
     if (mounted) {
       await _controller?.refresh();
-    }
-  }
-
-  Future<void> _openCreateGroupSheet(BuildContext context) async {
-    final repo = _repository;
-    if (repo == null) return;
-    final conv = await showModalBottomSheet<ConversationItem>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) =>
-          CreateGroupSheet(repository: repo, currentUserId: _currentUserId),
-    );
-    if (conv != null && mounted) {
-      await _navigateToConversation(conv);
     }
   }
 
@@ -179,11 +172,6 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           appBar: AppBar(
             title: const Text('Đoạn chat'),
             actions: [
-              IconButton(
-                tooltip: 'Tạo nhóm chat mới',
-                icon: const Icon(Icons.group_add_outlined),
-                onPressed: () => _openCreateGroupSheet(context),
-              ),
               IconButton(
                 tooltip: 'Cuộc trò chuyện mới',
                 icon: const Icon(Icons.edit_note_rounded),
@@ -325,6 +313,28 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
 
     if (items.isEmpty) {
+      if (controller.hasNext) {
+        return RefreshIndicator(
+          onRefresh: controller.refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('Chưa có hội thoại phù hợp trong phần đã tải.'),
+              ),
+              TextButton(
+                onPressed: controller.isLoadingMore
+                    ? null
+                    : controller.loadMore,
+                child: Text(
+                  controller.isLoadingMore ? 'Đang tải…' : 'Tải thêm hội thoại',
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       if (hasFriends) {
         final theme = Theme.of(context);
         return RefreshIndicator(
@@ -375,13 +385,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
         itemBuilder: (context, index) {
           if (index == items.length) {
-            return const Padding(
+            return Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                child: TextButton(
+                  onPressed: controller.isLoadingMore
+                      ? null
+                      : controller.loadMore,
+                  child: Text(
+                    controller.isLoadingMore
+                        ? 'Đang tải…'
+                        : 'Tải thêm hội thoại',
+                  ),
                 ),
               ),
             );

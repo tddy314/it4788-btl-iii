@@ -167,6 +167,8 @@ void main() {
         host(const PostComposerScreen(), scale: 1.4, keyboard: 220),
       );
       await tester.pumpAndSettle();
+      expect(find.text('Chọn video'), findsNothing);
+      expect(find.text('Quay video'), findsNothing);
       await tester.scrollUntilVisible(
         find.text('Đăng bài'),
         200,
@@ -180,7 +182,7 @@ void main() {
       await tester.tap(find.text('Đăng bài'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Nhập nội dung hoặc chọn ảnh/video cho bài viết.'),
+        find.text('Nhập nội dung hoặc chọn ảnh cho bài viết.'),
         findsOneWidget,
       );
       await tester.scrollUntilVisible(
@@ -291,6 +293,51 @@ void main() {
       );
       expect(button.onPressed, isNotNull);
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'A lost comment response with emotes can be reviewed and closed without sending twice',
+    (tester) async {
+      var sent = false;
+      final comment = {
+        'comment_id': 4,
+        'content': 'Chào 😊 https://example.com/a',
+        'author': {'user_id': 7, 'full_name': 'Sinh viên'},
+        'created_at': '2026-11-17T10:00:00Z',
+      };
+      adapter.respond = (r) async {
+        if (r.method == 'POST') {
+          sent = true;
+          throw DioException(
+            requestOptions: r,
+            type: DioExceptionType.receiveTimeout,
+          );
+        }
+        return response(200, pageJson(sent ? [comment] : []));
+      };
+      await tester.pumpWidget(host(const CommentsScreen(postId: 10)));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField),
+        'Chào :) https://example.com/a',
+      );
+      await tester.tap(find.text('Gửi bình luận'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tải lại để kiểm tra'));
+      await tester.pumpAndSettle();
+      expect(find.text('Đã thấy bình luận, đóng bản nháp'), findsOneWidget);
+      await tester.tap(find.text('Đã thấy bình luận, đóng bản nháp'));
+      await tester.pumpAndSettle();
+      expect(
+        (await dependencies.drafts.read(
+          userId: '7',
+          name: 'comment/10/root',
+        ))?['content'],
+        '',
+      );
+      expect(adapter.requests.where((r) => r.method == 'POST'), hasLength(1));
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

@@ -9,6 +9,7 @@ import '../../core/network/connection_monitor.dart';
 import '../../core/storage/draft_store.dart';
 import '../../core/storage/session_store.dart';
 import '../../core/validation/validators.dart';
+import '../../core/text/emote_converter.dart';
 import 'post_models.dart';
 import 'post_media_service.dart';
 import 'posts_repository.dart';
@@ -124,6 +125,13 @@ class ComposerController extends ChangeNotifier {
           );
         }
         final picked = await mediaService.inspect(file, userId);
+        if (picked.type != 'IMAGE') {
+          await mediaService.removeLocal(picked, userId);
+          throw const AppFailure(
+            FailureKind.rejected,
+            'Bài viết cá nhân chỉ nhận ảnh tĩnh. Video bài giảng vẫn xem được trên bảng tin.',
+          );
+        }
         if (!active) {
           await mediaService.removeLocal(picked, userId);
           break;
@@ -178,12 +186,17 @@ class ComposerController extends ChangeNotifier {
     final invalid = Validators.maxWords(content, 500);
     if (invalid != null ||
         (content.trim().isEmpty && retained.isEmpty && attachments.isEmpty)) {
-      message = invalid ?? 'Nhập nội dung hoặc chọn ảnh/video cho bài viết.';
+      message = invalid ?? 'Nhập nội dung hoặc chọn ảnh cho bài viết.';
       emit();
       return null;
     }
     if (attachments.any((e) => e.uncertain)) {
       message = 'Có tệp tải lên chưa rõ kết quả. Gỡ tệp đó và chọn lại nếu muốn tải lại.';
+      emit();
+      return null;
+    }
+    if (attachments.any((e) => e.type != 'IMAGE')) {
+      message = 'Bản nháp cũ có video. Nội dung vẫn được giữ; hãy gỡ video trước khi đăng bài theo yêu cầu mới.';
       emit();
       return null;
     }
@@ -308,7 +321,7 @@ class ComposerController extends ChangeNotifier {
         // A matching newly-created post is only a candidate; identical content
         // alone cannot prove which POST created it. Let the user inspect it.
         if ((original != null || confirmedId == post.id) &&
-            post.content == content.trim() &&
+            post.content == EmoteConverter.convert(content.trim()) &&
             listEquals(post.media.map((e) => e.url).toList(), urls)) {
           await complete();
           return post;
@@ -339,7 +352,7 @@ class ComposerController extends ChangeNotifier {
         !uncertain ||
         original != null ||
         post.author.id?.toString() != userId ||
-        post.content != content.trim()) {
+        post.content != EmoteConverter.convert(content.trim())) {
       return false;
     }
     final urls = [

@@ -1,64 +1,79 @@
 import 'package:flutter/material.dart';
 
 import '../../../profile/profile_models.dart';
-import '../../../question_bank/question_bank_routes.dart';
+import '../../../question_bank/question_bank_tab.dart';
 import '../../models/notification_item.dart';
+import 'session_notification_screen.dart';
 
 class NotificationDeepLinkHandler {
-  static void handleTap(BuildContext context, NotificationItem item) {
+  static final _opening = Expando<bool>();
+  static Future<void> handleTap(
+    BuildContext context,
+    NotificationItem item,
+  ) async {
     final target = item.target;
-    if (target == null || target.id.isEmpty) return;
-
-    final targetType = target.type.toUpperCase();
-
+    if (target == null) return;
+    final navigator = Navigator.of(context);
+    if (_opening[navigator] == true) return;
+    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(target.id)) {
+      _unavailable(context);
+      return;
+    }
+    _opening[navigator] = true;
     try {
-      switch (targetType) {
+      switch (target.type.toUpperCase()) {
         case 'CHAT':
         case 'MESSAGE':
         case 'CONVERSATION':
-          Navigator.of(context)
-              .pushNamed('/chat', arguments: {'conversationId': target.id});
-          break;
-
+          await navigator.pushNamed(
+            '/chat',
+            arguments: {'conversationId': target.id},
+          );
         case 'POST':
-          Navigator.of(context)
-              .pushNamed('/posts/detail', arguments: {'postId': target.id});
-          break;
-
+          await navigator.pushNamed(
+            '/posts/detail',
+            arguments: {'postId': target.id},
+          );
         case 'QUESTION_SESSION':
         case 'SESSION':
-          final sessionId = int.tryParse(target.id);
-          if (sessionId != null) {
-            Navigator.of(context)
-                .pushNamed(QuestionBankRoutes.submission, arguments: sessionId);
-          }
-          break;
-
+          await navigator.push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  SessionNotificationScreen(sessionId: int.parse(target.id)),
+            ),
+          );
         case 'FRIEND_REQUEST':
         case 'PROFILE':
         case 'USER':
-          Navigator.of(context)
-              .pushNamed(ProfileRoutes.user, arguments: target.id);
-          break;
-
+          await navigator.pushNamed(ProfileRoutes.user, arguments: target.id);
+        case 'QUESTION':
+          // The server exposes questions through practice sessions, not GET by ID.
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Mở bộ câu hỏi liên quan trong Ngân hàng câu hỏi để xem nội dung này.',
+              ),
+            ),
+          );
+          await navigator.push(
+            MaterialPageRoute<void>(builder: (_) => const QuestionBankTab()),
+          );
         default:
-          if (target.url != null && target.url!.isNotEmpty) {
-            Navigator.of(context).pushNamed(target.url!);
-          }
-          break;
+          _unavailable(context);
       }
     } catch (_) {
-      // Bắt ngoại lệ điều hướng nếu route chưa đăng ký hoặc nội dung đích bị xóa
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Nội dung này không còn tồn tại hoặc bạn không có quyền truy cập.',
-            ),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+      if (context.mounted) _unavailable(context);
+    } finally {
+      _opening[navigator] = false;
     }
   }
+
+  static void _unavailable(BuildContext context) =>
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nội dung này không còn tồn tại hoặc chưa có trang tương ứng.',
+          ),
+        ),
+      );
 }

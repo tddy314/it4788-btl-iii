@@ -1,151 +1,207 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/errors/app_failure.dart';
 import '../data/chat_repository.dart';
+import '../models/chat_event.dart';
 import '../models/conversation_item.dart';
 
 class ConversationsController extends ChangeNotifier {
-  ConversationsController({required this.repository, required this.userId});
-
+  ConversationsController({
+    required this.repository,
+    required this.userId,
+    bool Function()? isCurrent,
+  }) : _isCurrent = isCurrent ?? (() => true);
   final ChatRepository repository;
   final String userId;
-
+  final bool Function() _isCurrent;
   List<ConversationItem> _items = [];
   List<ChatPartnerSummary> _friends = [];
-  bool _isLoading = false;
-  bool _isLoadingMore = false;
-  String? _errorMessage;
-  String? _after;
-  bool _hasNext = false;
-
+  bool _isLoading = false,
+      _isLoadingMore = false,
+      _disposed = false,
+      _hasNext = false;
+  int _generation = 0;
+  Timer? _eventRefresh;
+  String? _errorMessage, _after, _cursor;
+  bool get _active => !_disposed && _isCurrent();
   List<ConversationItem> get items => List.unmodifiable(_items);
   List<ChatPartnerSummary> get friends => List.unmodifiable(_friends);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   String? get errorMessage => _errorMessage;
   bool get hasNext => _hasNext;
+  void _notify() {
+    if (_active) notifyListeners();
+  }
 
   Future<void> initialize() async {
-    // 1. Cache-first loading
-    final cached = await repository.loadCachedConversations(userId);
-    if (cached != null && cached.items.isNotEmpty) {
-      _items = cached.items;
-      _after = cached.after;
-      _hasNext = cached.hasNext;
-      notifyListeners();
+    try {
+      final cached = await repository.loadCachedConversations(userId);
+      if (!_active) return;
+      if (cached != null) {
+        _items = cached.items.where((e) => e.type == 'DIRECT').toList();
+        _notify();
+      }
+    } catch (_) {
+      /* Fetch even if storage fails. */
     }
-
-    // 2. Lấy danh sách hội thoại và danh sách bạn bè từ server
-    await Future.wait([
-      fetchFirstPage(showLoading: _items.isEmpty),
-      _loadFriends(),
-    ]);
-
-    // 3. Lắng nghe tin nhắn mới qua STOMP WebSocket để cập nhật danh sách hội thoại
-    _setupStompListener();
+    if (!_active) return;
+    repository.stomp?.subscribe('/user/queue/messages', (payload) {
+      if (!_active) return;
+      final event = ChatEvent.parse(payload);
+      if (event.type == ChatEventType.unknown ||
+          event.type == ChatEventType.typing) {
+        return;
+      }
+      // Fetch authoritative unread counts; own events/receipts are not unread messages.
+      _eventRefresh?.cancel();
+      _eventRefresh = Timer(const Duration(milliseconds: 300), () {
+        if (_active) unawaited(fetchFirstPage(showLoading: false));
+      });
+    });
+    await refresh();
   }
 
   Future<void> _loadFriends() async {
     try {
       final list = await repository.fetchFriendsForChat();
-      _friends = list.where((f) => f.userId != userId).toList();
-      notifyListeners();
-    } catch (_) {
-      // Lỗi tải danh sách bạn bè không làm hỏng danh sách hội thoại cache
-    }
-  }
-
-  void _setupStompListener() {
-    final stomp = repository.stomp;
-    if (stomp == null) return;
-    stomp.connect();
-
-    stomp.subscribe('/user/queue/messages', (payload) {
-      final convId = payload['conversation_id']?.toString();
-      final content = payload['content'] as String?;
-      final msgId = payload['message_id']?.toString();
-      if (convId == null) return;
-
-      final index = _items.indexWhere((e) => e.conversationId == convId);
-      if (index != -1) {
-        final existing = _items[index];
-        final updated = existing.copyWith(
-          lastMessageContent: content ?? existing.lastMessageContent,
-          lastMessageId: msgId ?? existing.lastMessageId,
-          unreadCount: existing.unreadCount + 1,
-          updatedAt: DateTime.now(),
-        );
-        _items.removeAt(index);
-        _items.insert(0, updated);
-        notifyListeners();
-        repository.saveCachedConversations(
-          userId,
-          ConversationListResponse(
-            items: _items,
-            after: _after,
-            hasNext: _hasNext,
-          ),
-        );
-      } else {
-        // Tải lại trang đầu để cập nhật hội thoại mới
-        fetchFirstPage(showLoading: false);
+      if (_active) {
+        _friends = list.where((e) => e.userId != userId).toList();
+        _notify();
       }
-    });
+    } catch (_) {
+      /* Does not invalidate cached conversations. */
+    }
   }
 
   Future<void> fetchFirstPage({bool showLoading = true}) async {
-    if (showLoading) {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-    }
-
+    if (!_active || _isLoading) return;
+    final generation = ++_generation;
+    _isLoading = true;
+    _isLoadingMore = false;
+    _errorMessage = null;
+    _notify();
     try {
-      final response = await repository.fetchConversations(limit: 20);
-      _items = response.items;
-      _after = response.after;
-      _hasNext = response.hasNext;
-      _errorMessage = null;
-
-      await repository.saveCachedConversations(userId, response);
-    } on AppFailure catch (failure) {
-      _errorMessage = failure.message;
+      final page = await repository.fetchConversations(limit: 20);
+      if (!_active || generation != _generation) return;
+      _items = page.items.where((e) => e.type == 'DIRECT').toList();
+      _after = page.after;
+      _cursor = page.nextCursor;
+      _hasNext = page.hasNext;
+      try {
+        await repository.saveCachedConversations(userId, page);
+      } catch (_) {
+        if (_active) _errorMessage = 'Không lưu được hội thoại trên máy.';
+      }
+    } on AppFailure catch (e) {
+      if (!_active || generation != _generation) return;
+      _errorMessage = e.message;
+      if (const [
+        FailureKind.unauthorized,
+        FailureKind.forbidden,
+        FailureKind.notFound,
+      ].contains(e.kind)) {
+        _items = [];
+        _hasNext = false;
+        try {
+          await repository.clearCachedConversations(userId);
+        } catch (_) {}
+      }
     } catch (_) {
-      _errorMessage = 'Không thể tải danh sách cuộc trò chuyện.';
+      if (_active) _errorMessage = 'Không thể tải danh sách cuộc trò chuyện.';
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_active && generation == _generation) {
+        _isLoading = false;
+        _notify();
+      }
     }
   }
 
   Future<void> refresh() async {
+    if (!_active) return;
     await Future.wait([fetchFirstPage(showLoading: false), _loadFriends()]);
+    if (_active) await repository.stomp?.connect();
   }
 
   Future<void> loadMore() async {
-    if (_isLoadingMore || !_hasNext || _after == null) return;
-
+    if (!_active ||
+        _isLoading ||
+        _isLoadingMore ||
+        !_hasNext ||
+        (_after == null && _cursor == null) ||
+        _items.length >= 200) {
+      return;
+    }
+    final generation = _generation, after = _after, cursor = _cursor;
     _isLoadingMore = true;
-    notifyListeners();
-
+    _notify();
     try {
-      final response = await repository.fetchConversations(
-        after: _after,
+      final page = await repository.fetchConversations(
+        after: cursor == null ? after : null,
+        cursor: cursor,
         limit: 20,
       );
-      final existingIds = _items.map((e) => e.conversationId).toSet();
-      final newItems = response.items.where(
-        (e) => !existingIds.contains(e.conversationId),
+      if (!_active || generation != _generation) return;
+      final ids = _items.map((e) => e.conversationId).toSet();
+      _items.addAll(
+        page.items.where(
+          (e) => e.type == 'DIRECT' && ids.add(e.conversationId),
+        ),
       );
-
-      _items = [..._items, ...newItems];
-      _after = response.after;
-      _hasNext = response.hasNext;
+      _after = page.after;
+      _cursor = page.nextCursor;
+      _hasNext =
+          page.hasNext &&
+          (page.nextCursor != null
+              ? page.nextCursor != cursor
+              : page.after != after) &&
+          _items.length < 200;
+      try {
+        await repository.saveCachedConversations(
+          userId,
+          ConversationListResponse(
+            items: _items,
+            after: _after,
+            nextCursor: _cursor,
+            hasNext: _hasNext,
+          ),
+        );
+      } catch (_) {
+        if (_active) _errorMessage = 'Không lưu được hội thoại trên máy.';
+      }
+    } on AppFailure catch (e) {
+      if (!_active || generation != _generation) return;
+      _errorMessage = e.message;
+      if (const [
+        FailureKind.unauthorized,
+        FailureKind.forbidden,
+        FailureKind.notFound,
+      ].contains(e.kind)) {
+        _items = [];
+        _hasNext = false;
+        try {
+          await repository.clearCachedConversations(userId);
+        } catch (_) {}
+      }
     } catch (_) {
-      // Giữ nguyên trạng thái tải thêm
+      if (_active) _errorMessage = 'Không thể tải thêm hội thoại.';
     } finally {
-      _isLoadingMore = false;
-      notifyListeners();
+      if (_active && generation == _generation) {
+        _isLoadingMore = false;
+        _notify();
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    ++_generation;
+    _eventRefresh?.cancel();
+    repository.stomp?.unsubscribe('/user/queue/messages');
+    repository.stomp?.disconnect();
+    super.dispose();
   }
 }

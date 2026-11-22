@@ -1,7 +1,9 @@
 # PRODUCT BACKLOG – THÀNH VIÊN 5
+
+> Cập nhật 18/11/2026: đây là kế hoạch nội bộ, không phải đặc tả nguyên văn của thầy. Tham chiếu slide/JSON bên dưới có chỗ dùng tên trường và kiểu cũ; PDF thực tế có 208 trang. Dùng [đối chiếu PDF–Swagger hiện tại](doi-chieu-pdf-swagger-2026-11-18.md) và OpenAPI làm căn cứ triển khai. Những đề xuất optimistic read, tài nguyên GIF có sẵn hoặc tự retry không phải yêu cầu PDF. Mã thành công thực tế đã xác nhận trước đây là `1000`, không dùng ví dụ `0000` để thay cấu hình.
 > **Dự án:** SQB (Social Network for Student-Generated Question Bank) – Bài tập lớn IT4788  
 > **Phạm vi trách nhiệm:** `features/chat`, `features/notifications`, Cài đặt thông báo & Quản trị thiết bị trong `features/settings`  
-> **Tài liệu căn cứ:** Slide đặc tả bài tập lớn (207 trang), `AGENTS.md`, `docs/phan-tich-yeu-cau-frontend.md`  
+> **Tài liệu căn cứ:** PDF đặc tả bài tập lớn (208 trang), `AGENTS.md`, `docs/doi-chieu-pdf-swagger-2026-11-18.md`
 > **Nguyên tắc cốt lõi:** Nghiệm thu kiểm tra mất mạng bắt buộc của giảng viên (Bảo toàn draft, chống gửi duplicate, cache offline, đồng bộ an toàn).
 
 ---
@@ -59,15 +61,15 @@
 
 #### 🔹 US-02: Đánh dấu đã đọc thông báo (Từng mục & Đọc tất cả)
 * **Mô tả:** Là một sinh viên, tôi muốn khi bấm vào một thông báo chưa đọc thì nó chuyển sang trạng thái đã đọc, hoặc có nút "Đánh dấu tất cả là đã đọc" để xóa toàn bộ cờ chưa đọc.
-* **API Hợp đồng (Slide 195, 196):**
+* **API Hợp đồng (PDF trang 196, 197; kiểu dữ liệu lấy Swagger hiện tại):**
   * `POST /notifications/{id}/read` $\rightarrow$ Trả về `unread_count` mới.
   * `POST /notifications/read-all` $\rightarrow$ Đánh dấu toàn bộ là đã đọc, trả về `data: null`.
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Khi nhấn vào thông báo chưa đọc:
-     * Cập nhật ngay trên UI sang trạng thái "đã đọc" (Optimistic Update) và giảm `unread_count`.
-     * Gửi request `POST /notifications/{id}/read`.
+     * Gửi request `POST /notifications/{id}/read`; chỉ cập nhật UI sau xác nhận, dùng `read`, `read_at`, `unread_count` trong response Swagger. PDF trang 196 dùng tên cũ `is_read` và không bắt buộc Optimistic Update.
+     * Lỗi giữ trạng thái đã biết; timeout chỉ đối soát GET, không tự gửi lại POST. GET cũ không ghi đè biên nhận mới.
   2. Nút "Đánh dấu tất cả đã đọc" trên AppBar:
-     * Nhấn vào sẽ chuyển toàn bộ danh sách thành đã đọc và gọi `POST /notifications/read-all`.
+     * Gọi `POST /notifications/read-all` và chuyển toàn bộ danh sách đã đọc khi server xác nhận (`data: null`).
      * Chặn bấm liên tục (debounce/disable button) khi đang trong quá trình gửi request.
 
 ---
@@ -76,9 +78,9 @@
 * **Mô tả:** Là một người dùng, khi nhấn vào một thông báo, tôi muốn ứng dụng tự động mở đúng bài viết, chi tiết bộ câu hỏi, cuộc trò chuyện hoặc trang cá nhân tương ứng.
 * **Quy tắc điều hướng (Slide 26 & 194):**
   * `target.type == "POST"` $\rightarrow$ Mở màn hình chi tiết bài viết (`AppRoutes.postDetail`).
-  * `target.type == "QUESTION_SESSION"` $\rightarrow$ Mở chi tiết đề xuất câu hỏi trong `features/question_bank`.
-  * `target.type == "CHAT" / "MESSAGE"` $\rightarrow$ Mở màn hình chat chi tiết với người gửi.
-  * `target.type == "FRIEND_REQUEST"` $\rightarrow$ Mở tab Bạn bè / Hồ sơ cá nhân người gửi.
+  * `target.type == "SESSION"` $\rightarrow$ Mở chi tiết đề xuất câu hỏi trong `features/question_bank` khi có quyền. `QUESTION` cần ID phiên để tới câu cụ thể; nếu thiếu thì vào Ngân hàng câu hỏi với thông báo hướng dẫn, không đoán ID.
+  * `target.type == "CONVERSATION"` $\rightarrow$ Mở màn hình chat theo `target_id`.
+  * `target.type == "USER"` $\rightarrow$ Mở hồ sơ theo `target_id`. Các tên cũ `CHAT`, `MESSAGE`, `QUESTION_SESSION` chỉ là alias tương thích, không phải enum Swagger hiện tại.
 * **Xử lý ngoại lệ an toàn:**
   * Nếu nội dung đích đã bị tác giả xóa (API trả về HTTP 404 hoặc 403): Hiển thị SnackBar thông báo tiếng Việt: *"Nội dung này không còn tồn tại hoặc bạn không có quyền xem"*, giữ nguyên màn hình hiện tại, **tuyệt đối không để ứng dụng crash**.
 
@@ -87,7 +89,7 @@
 #### 🔹 US-04: Cache offline danh sách thông báo & Xử lý mất mạng
 * **Mô tả:** Khi giảng viên ngắt mạng kiểm tra bài tập lớn, mở tab thông báo vẫn phải hiển thị danh sách đã lưu trước đó, không được hiện màn hình lỗi trắng xóa.
 * **Kỹ thuật tích hợp (Slide 35, 36 & AGENTS.md):**
-  * Sử dụng `JsonCache` lưu trữ danh sách theo `userId`.
+  * Lưu qua `DraftStore` bảo mật theo `userId`, tối đa 30 mục/512 KiB; chuyển record `JsonCache` cũ khi đọc, không ghi nội dung riêng tư vào preferences.
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Khi offline, mở tab thông báo: Đọc dữ liệu từ cache cục bộ và hiển thị đầy đủ kèm `ConnectionBanner` báo trạng thái mất mạng.
   2. Kéo làm mới (pull-to-refresh) lúc mất mạng: Giữ nguyên danh sách cũ, hiện thông báo lỗi nhẹ ở góc dưới, **không xóa dữ liệu đã hiển thị**.
@@ -120,7 +122,7 @@
 * **Mô tả:** Bấm vào nút "Nhắn tin" từ trang cá nhân hoặc danh sách bạn bè để bắt đầu trò chuyện trực tiếp 1–1.
 * **API Hợp đồng (Slide 182):**
   * Endpoint: `POST /conversations/direct`
-  * Body: `{ "target_user_id": "123" }`
+  * Body theo Swagger: `{ "target_user_id": 123 }` (số nguyên).
   * Response: `{ conversation_id: "99", type: "DIRECT", members: [...] }`
 * **Xử lý đặc biệt (Slide 24 & AGENTS.md):**
   * Nếu hai người **đã chặn (block) nhau**: Màn hình chat phải hiển thị thông báo *"Bạn không thể gửi tin nhắn cho người này"* và khóa hoàn toàn ô nhập văn bản.
@@ -159,7 +161,7 @@
      * Tin nhắn vừa gửi xuất hiện ngay trong khung chat với icon đồng hồ ("Đang gửi").
      * Server xác nhận thành công $\rightarrow$ Chuyển sang "Đã gửi".
      * Lỗi mạng/timeout $\rightarrow$ Hiển thị dấu chấm than đỏ ("Lỗi gửi - Chạm để thử lại").
-  3. **Chống Replay Request:** Gán mã `client_msg_id` tạm thời cho mỗi tin nhắn; khi bấm thử lại gửi, giữ nguyên mã này để server đối soát, tránh tạo 2 tin nhắn trùng lặp.
+  3. **Chống Replay Request:** Gán `client_msg_id` để theo dõi cục bộ, nhưng chưa xác nhận backend echo/chống trùng bằng trường này. Kết quả gửi chưa rõ phải ở `unconfirmed` và đối soát bằng lịch sử; không replay tin/upload dựa vào giả định UUID bảo đảm chống trùng ở server.
   4. Vô hiệu hóa nút gửi khi ô nhập rỗng hoặc chỉ toàn khoảng trắng.
 
 ---
@@ -194,7 +196,7 @@
   * Handshake WSS: `wss://snsqb.duckdns.org/api/v1/ws` (Header: `Authorization: Bearer <token>`).
   * Lắng nghe tin mới: Subscribe `/user/queue/messages`.
   * Gửi tin: `SEND /app/chat.send` với body `{ conversation_id, content, message_type: "TEXT"|"IMAGE", media_urls: [...] }`.
-  * Trạng thái đang gõ: `SEND /app/chat.typing` với `{ conversation_id, is_typing: true/false }`. Lắng nghe tại `/topic/conv.{id}.typing`.
+  * Swagger hiện tại: `SEND /app/chat.typing` với `{ conversation_id: 1, typing: true/false }`. Nhận typing/read/message qua `/user/queue/messages`; không phát payload/topic cũ trong PDF lên server hiện tại.
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Kết nối STOMP sau khi đăng nhập và tự động ngắt khi đăng xuất.
   2. Nhận tin nhắn mới: Tin nhắn mới xuất hiện ngay lập tức và tự cuộn xuống đáy màn hình.
@@ -206,7 +208,7 @@
 #### 🔹 US-12: Đồng bộ trạng thái đã đọc tin nhắn
 * **Mô tả:** Báo cho server và đối phương biết mình đã đọc tin nhắn đến mốc nào.
 * **API Hợp đồng (Slide 191):**
-  * `SEND /app/chat.read` với payload: `{ "conversation_id": "1", "message_id": "123" }`.
+  * `SEND /app/chat.read` với payload theo Swagger: `{ "conversation_id": 1, "message_id": 123 }`.
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Khi người dùng mở màn hình hội thoại hoặc cuộn tới tin nhắn mới: Tự động phát sự kiện đọc qua WebSocket.
   2. Hiển thị chữ "Đã xem" nhỏ dưới tin nhắn cuối cùng do mình gửi khi đối phương đã đọc.
@@ -219,7 +221,7 @@
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Mở app ở chế độ máy bay: Đọc lại toàn bộ lịch sử tin nhắn đã cache từ trước.
   2. Đang gửi tin nhắn thì mất mạng: Không treo spinner vô hạn; hiển thị ngay banner offline và biểu tượng "Gửi thất bại" cạnh tin nhắn.
-  3. Bật lại mạng: WebSocket tự động kết nối lại (kèm cơ chế exponential backoff, không spam reconnect liên tục).
+  3. Bật lại mạng: kết nối lại có kiểm soát khi foreground/thử lại hoặc nhận thay đổi mạng; không vòng lặp reconnect vô hạn, không tự phát lại thao tác ghi.
   4. Đồng bộ lại lịch sử tin nhắn mới từ server, đối soát bằng `message_id` để loại bỏ tin nhắn trùng lặp.
   5. Mất mạng **không được tự ý logout** người dùng.
 
@@ -234,21 +236,21 @@
   * *"Cho phép thiết lập tắt thông báo đẩy hoặc có thông báo đẩy nhưng dùng âm thanh mặc định (tiếng chuông vang lên) hoặc âm có tiếng nói (yêu cầu SV thu âm giọng nói để làm file phát ra)"*
 * **API Hợp đồng (Slide 197–200):**
   * `GET /settings/push` & `PUT /settings/push`
-  * Payload: `{ push_enabled: "true"|"false", categories: { social: { enabled }, academic: { enabled }, system: { enabled } }, sound_enabled: "true"|"false", vibration_enabled: "true"|"false" }`
+  * Swagger hiện tại dùng boolean và key uppercase: `{ "push_enabled": true, "categories": { "SOCIAL": { "enabled": true }, "ACADEMIC": { "enabled": true }, "SYSTEM": { "enabled": true } }, "sound_enabled": true, "vibration_enabled": true }`; giữ `quiet_hours` và key khác không hiển thị. Không gửi `sound_type` ngoài schema.
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Màn hình Cài đặt thông báo gồm các Switch bật/tắt:
      * Tổng thể: Bật/tắt toàn bộ thông báo đẩy.
      * Từng chuyên mục: Mạng xã hội (tương tác, bạn bè), Học tập (ngân hàng câu hỏi), Hệ thống.
      * Rung (Vibration) & Âm thanh (Sound).
-  2. **Tùy chọn âm thanh:** Cho phép chọn giữa "Âm thanh mặc định" và "Âm thanh đặc trưng (Giọng nói thông báo)" bằng file âm thanh tích hợp sẵn trong assets.
+  2. **Tùy chọn âm thanh:** Mặc định hoặc giọng nói do sinh viên thu âm theo PDF trang 29; không thay yêu cầu thu âm bằng file có sẵn trong assets. Cần thử thu/phát và push chạy nền trên điện thoại thật.
 
 ---
 
 #### 🔹 US-15: Đăng ký & Hủy thiết bị nhận Push (Device FID / FCM)
 * **Mô tả:** Đăng ký định danh thiết bị lên hệ thống để nhận Push Notification và hủy đăng ký khi đăng xuất.
-* **API Hợp đồng (Slide 86, 87, 198):**
-  * `POST /devices/register` (hoặc `/devices/fid`) với `{ fcm_token, platform: "ANDROID", device_name, app_version }`.
-  * `DELETE /devices/register` (hoặc `/devices/fid/unregister`) khi logout.
+* **API Hợp đồng:** đối chiếu endpoint/schema thiết bị trong Swagger hiện tại; không suy đường dẫn từ tên slide cũ.
+  * Theo Swagger hiện tại: `POST /devices/fid` với `{ "fid": "..." }` (Firebase Installation ID, không thay bằng FCM registration token).
+  * `POST /devices/fid/unregister` với `{ "fid": "..." }` khi logout; không tự dùng DELETE hay endpoint `/devices/register` không có trong hợp đồng.
 * **Tiêu chí nghiệm thu (Acceptance Criteria):**
   1. Tự động xin quyền thông báo trên Android (đặc biệt Android 13+ `POST_NOTIFICATIONS`).
   2. Gửi định danh thiết bị lên server sau khi đăng nhập thành công.

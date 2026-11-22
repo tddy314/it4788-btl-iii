@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/text/emote_converter.dart';
+
 import '../../app/app_scope.dart';
 import '../../core/errors/app_failure.dart';
 import '../../core/network/connection_monitor.dart';
@@ -373,7 +375,10 @@ class _CommentsScreenState extends State<CommentsScreen> {
                                             !entry.deleted &&
                                             entry.author.id?.toString() ==
                                                 _user &&
-                                            entry.content == _text.text.trim(),
+                                            entry.content ==
+                                                EmoteConverter.convert(
+                                                  _text.text.trim(),
+                                                ),
                                       ))
                                         TextButton(
                                           onPressed: () async {

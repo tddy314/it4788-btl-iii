@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 typedef StompMessageCallback = void Function(Map<String, dynamic> jsonPayload);
+typedef SocketConnector = Future<WebSocket> Function(String url);
 
 enum StompConnectionState { disconnected, connecting, connected }
 
@@ -13,363 +14,314 @@ class StompFrame {
     required this.headers,
     required this.body,
   });
-
   final String command;
   final Map<String, String> headers;
   final String body;
-
   String toWireFormat() {
-    final buffer = StringBuffer()..write('$command\n');
-    headers.forEach((key, value) {
-      buffer.write('$key:$value\n');
-    });
-    buffer
-      ..write('\n')
-      ..write(body)
-      ..write('\x00');
-    return buffer.toString();
+    final out = StringBuffer()..writeln(command);
+    headers.forEach((key, value) => out.writeln('$key:$value'));
+    return '${out.toString()}\n$body\x00';
   }
 
   static StompFrame? parse(String raw) {
-    if (raw.isEmpty) return null;
-    final parts = raw.split('\n\n');
-    if (parts.length < 2) return null;
-
-    final headerLines = parts[0].split('\n');
-    final command = headerLines.first.trim();
+    raw = raw.replaceFirst(RegExp(r'^[\r\n]+'), '').replaceAll('\r\n', '\n');
+    final separator = raw.indexOf('\n\n');
+    if (separator < 0) return null;
+    final lines = raw.substring(0, separator).split('\n');
+    if (lines.first.isEmpty) return null;
     final headers = <String, String>{};
-
-    for (var i = 1; i < headerLines.length; i++) {
-      final line = headerLines[i];
-      final colonIndex = line.indexOf(':');
-      if (colonIndex > 0) {
-        final key = line.substring(0, colonIndex).trim();
-        final value = line.substring(colonIndex + 1).trim();
-        headers[key] = value;
+    for (final line in lines.skip(1)) {
+      final colon = line.indexOf(':');
+      if (colon > 0) {
+        headers[line.substring(0, colon)] = line.substring(colon + 1);
       }
     }
-
-    var body = parts.sublist(1).join('\n\n');
-    if (body.endsWith('\x00')) {
-      body = body.substring(0, body.length - 1);
-    }
-
-    return StompFrame(command: command, headers: headers, body: body);
+    var body = raw.substring(separator + 2);
+    if (body.endsWith('\x00')) body = body.substring(0, body.length - 1);
+    return StompFrame(command: lines.first, headers: headers, body: body);
   }
 }
 
+/// One verified connection. Reconnect is explicit; writes are never replayed.
 class SqbStompClient {
-  SqbStompClient({required this.url, required this.tokenProvider});
-
+  SqbStompClient({
+    required this.url,
+    required this.tokenProvider,
+    SocketConnector? connector,
+    this.handshakeTimeout = const Duration(seconds: 12),
+  }) : _connector = connector ?? WebSocket.connect;
   final String url;
   final Future<String?> Function() tokenProvider;
-
+  final SocketConnector _connector;
+  final Duration handshakeTimeout;
   WebSocket? _socket;
+  StreamSubscription<dynamic>? _socketSubscription;
+  final _subscriptions = <String, (String, StompMessageCallback)>{};
+  final _states = StreamController<StompConnectionState>.broadcast();
   StompConnectionState _state = StompConnectionState.disconnected;
-  final Map<String, StompMessageCallback> _subscriptions = {};
-  int _subIdCounter = 0;
-  Timer? _reconnectTimer;
-  Timer? _heartbeatTimer;
-  Timer? _connectFallbackTimer;
-  bool _isDisposed = false;
-  bool _isSockJs = false;
-  String? _currentToken;
-  String _incomingBuffer = '';
-
+  bool _disposed = false, _sockJs = false;
+  int _generation = 0, _nextId = 0;
+  String _buffer = '';
+  String? _token;
+  String? lastError;
+  Timer? _heartbeat, _fallback;
+  Completer<void>? _handshake;
+  Future<void>? _connecting;
   StompConnectionState get state => _state;
-  bool get isConnected => _state == StompConnectionState.connected;
+  bool get isConnected =>
+      _state == StompConnectionState.connected && !_disposed;
+  Stream<StompConnectionState> get stateStream => _states.stream;
 
-  final _stateController = StreamController<StompConnectionState>.broadcast();
-  Stream<StompConnectionState> get stateStream => _stateController.stream;
+  Future<void> connect() {
+    if (_disposed || isConnected) return Future.value();
+    return _connecting ??= _connect().whenComplete(() => _connecting = null);
+  }
 
-  Future<void> connect() async {
-    if (_isDisposed ||
-        _state == StompConnectionState.connecting ||
-        _state == StompConnectionState.connected) {
-      return;
-    }
-
-    _updateState(StompConnectionState.connecting);
-
+  Future<void> _connect() async {
+    final generation = ++_generation;
+    bool current() => !_disposed && generation == _generation;
+    lastError = null;
+    _setState(StompConnectionState.connecting);
+    _handshake = Completer<void>();
     try {
-      final token = await tokenProvider();
-      if (token == null || token.isEmpty) {
-        _updateState(StompConnectionState.disconnected);
+      _token = await tokenProvider();
+      if (!current()) return;
+      if (_token == null || _token!.isEmpty) {
+        lastError = 'Cần đăng nhập để kết nối trò chuyện.';
+        disconnect();
         return;
       }
-      _currentToken = token;
-
-      var targetUrl = url.trim();
-      if (targetUrl.endsWith('/')) {
-        targetUrl = targetUrl.substring(0, targetUrl.length - 1);
+      var target = url.replaceFirst(RegExp(r'/$'), '');
+      final uri = Uri.parse(target);
+      _sockJs = uri.path.endsWith('/ws') || uri.path.endsWith('/websocket');
+      if (uri.scheme != 'wss' &&
+          !(uri.scheme == 'ws' &&
+              (uri.host == '127.0.0.1' || uri.host == 'localhost'))) {
+        throw const FormatException('WSS required');
       }
-      if (targetUrl.contains('/ws') && !targetUrl.contains('/websocket')) {
-        final serverId = Random().nextInt(1000).toString().padLeft(3, '0');
-        final sessionId = DateTime.now().millisecondsSinceEpoch.toRadixString(
-          36,
-        );
-        targetUrl = '$targetUrl/$serverId/$sessionId/websocket';
+      if (uri.path.endsWith('/ws')) {
+        target +=
+            '/${Random.secure().nextInt(1000).toString().padLeft(3, '0')}'
+            '/${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}/websocket';
       }
-
-      final httpClient = HttpClient()
-        ..badCertificateCallback = (cert, host, port) => true;
-
-      _socket = await WebSocket.connect(
-        targetUrl,
-        customClient: httpClient,
-      ).timeout(const Duration(seconds: 10));
-
-      _socket!.listen(
-        _onData,
-        onError: _onError,
-        onDone: _onDone,
+      final opening = _connector(target);
+      unawaited(
+        opening.then((socket) {
+          if (!current()) unawaited(socket.close());
+        }, onError: (Object _) {}),
+      );
+      final socket = await opening.timeout(handshakeTimeout);
+      if (!current()) {
+        unawaited(socket.close());
+        return;
+      }
+      _socket = socket;
+      _socketSubscription = socket.listen(
+        (data) {
+          if (current()) _onData(data);
+        },
+        onError: (Object _) {
+          if (current()) {
+            lastError = 'Mất kết nối trò chuyện. Hãy thử kết nối lại.';
+            disconnect();
+          }
+        },
+        onDone: () {
+          if (current()) disconnect();
+        },
         cancelOnError: true,
       );
-
-      // Nếu sau 600ms không nhận frame 'o' của SockJS thì gửi CONNECT raw trực tiếp
-      _connectFallbackTimer?.cancel();
-      _connectFallbackTimer = Timer(const Duration(milliseconds: 600), () {
-        if (!_isSockJs && _state == StompConnectionState.connecting) {
-          _sendConnectFrame();
-        }
+      _fallback = Timer(const Duration(milliseconds: 600), () {
+        if (current() && !_sockJs) _sendConnect();
       });
+      await _handshake!.future.timeout(handshakeTimeout);
     } catch (_) {
-      _handleDisconnectAndScheduleReconnect();
+      if (current()) {
+        lastError =
+            'Không thể kết nối trò chuyện. Hãy kiểm tra mạng và thử lại.';
+        disconnect();
+      }
     }
   }
 
-  void _sendWire(String wire) {
-    if (_socket == null) return;
-    if (_isSockJs) {
-      _socket!.add(jsonEncode([wire]));
-    } else {
-      _socket!.add(wire);
-    }
+  void _setState(StompConnectionState state) {
+    if (_state == state) return;
+    _state = state;
+    if (!_states.isClosed) _states.add(state);
   }
 
-  void _sendConnectFrame() {
-    final token = _currentToken;
-    if (token == null || _socket == null) return;
-    final connectFrame = StompFrame(
-      command: 'CONNECT',
-      headers: {
-        'accept-version': '1.1,1.2',
-        'heart-beat': '10000,10000',
-        'Authorization': 'Bearer $token',
-        'passcode': token,
-      },
-      body: '',
+  void _wire(String wire) {
+    if (_disposed || _socket == null) throw StateError('Chat disconnected');
+    _socket!.add(_sockJs ? jsonEncode([wire]) : wire);
+  }
+
+  void _sendConnect() {
+    if (_socket == null || _token == null) return;
+    _wire(
+      StompFrame(
+        command: 'CONNECT',
+        headers: {
+          'accept-version': '1.2',
+          'heart-beat': '10000,10000',
+          'Authorization': 'Bearer $_token',
+        },
+        body: '',
+      ).toWireFormat(),
     );
-    _sendWire(connectFrame.toWireFormat());
   }
 
-  void _onData(dynamic rawData) {
-    final String text;
-    if (rawData is String) {
-      text = rawData;
-    } else if (rawData is List<int>) {
-      text = utf8.decode(rawData, allowMalformed: true);
-    } else {
-      return;
-    }
-
+  void _onData(dynamic data) {
+    final text = data is String
+        ? data
+        : data is List<int>
+        ? utf8.decode(data, allowMalformed: true)
+        : '';
     if (text == 'o') {
-      _isSockJs = true;
-      _connectFallbackTimer?.cancel();
-      _sendConnectFrame();
+      _sockJs = true;
+      _fallback?.cancel();
+      _sendConnect();
       return;
     }
-
-    if (text == 'h') {
-      return;
-    }
-
+    if (text == 'h') return;
     if (text.startsWith('c[')) {
-      _handleDisconnectAndScheduleReconnect();
+      disconnect();
       return;
     }
-
     if (text.startsWith('a[')) {
-      _isSockJs = true;
-      _connectFallbackTimer?.cancel();
+      _sockJs = true;
       try {
-        final jsonArray = jsonDecode(text.substring(1));
-        if (jsonArray is List) {
-          for (final item in jsonArray) {
-            if (item is String) {
-              _handleRawStompStream(item);
+        final array = jsonDecode(text.substring(1));
+        if (array is List) {
+          for (final value in array.whereType<String>()) {
+            _consume(value);
+          }
+        }
+      } on FormatException {
+        disconnect();
+      }
+    } else {
+      _consume(text);
+    }
+  }
+
+  void _consume(String text) {
+    _buffer += text;
+    _buffer = _buffer.replaceFirst(RegExp(r'^[\r\n]+'), '');
+    if (_buffer.length > 1024 * 1024) {
+      disconnect();
+      return;
+    }
+    while (_buffer.contains('\x00')) {
+      final end = _buffer.indexOf('\x00');
+      final frame = StompFrame.parse(_buffer.substring(0, end + 1));
+      _buffer = _buffer
+          .substring(end + 1)
+          .replaceFirst(RegExp(r'^[\r\n]+'), '');
+      if (frame == null) continue;
+      switch (frame.command) {
+        case 'CONNECTED':
+          _fallback?.cancel();
+          _setState(StompConnectionState.connected);
+          for (final entry in _subscriptions.entries) {
+            _subscribe(entry.key, entry.value.$1);
+          }
+          if (_handshake?.isCompleted == false) _handshake!.complete();
+          _heartbeat?.cancel();
+          _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
+            if (isConnected) {
+              try {
+                _wire('\n');
+              } catch (_) {
+                disconnect();
+              }
+            }
+          });
+        case 'MESSAGE':
+          final callback = _subscriptions[frame.headers['destination']]?.$2;
+          if (callback != null) {
+            try {
+              final body = jsonDecode(frame.body);
+              if (body is Map<String, dynamic>) callback(body);
+            } on FormatException {
+              /* Ignore malformed event. */
             }
           }
-        }
-      } catch (_) {}
-      return;
-    }
-
-    _handleRawStompStream(text);
-  }
-
-  void _handleRawStompStream(String stream) {
-    _incomingBuffer += stream;
-    while (_incomingBuffer.contains('\x00')) {
-      final nullIndex = _incomingBuffer.indexOf('\x00');
-      final singleFrameRaw = _incomingBuffer.substring(0, nullIndex + 1);
-      _incomingBuffer = _incomingBuffer.substring(nullIndex + 1);
-
-      final frame = StompFrame.parse(singleFrameRaw);
-      if (frame != null) {
-        _handleFrame(frame);
+        case 'ERROR':
+          lastError = 'Máy chủ từ chối thao tác trò chuyện. Hãy tải lại để kiểm tra phiên và quyền.';
+          disconnect();
       }
     }
   }
 
-  void _handleFrame(StompFrame frame) {
-    switch (frame.command) {
-      case 'CONNECTED':
-        _updateState(StompConnectionState.connected);
-        _reconnectTimer?.cancel();
-        _resubscribeAll();
-        _startHeartbeat();
-        break;
-
-      case 'MESSAGE':
-        final destination = frame.headers['destination'];
-        if (destination != null) {
-          final callback = _subscriptions[destination];
-          if (callback != null && frame.body.isNotEmpty) {
-            try {
-              final json = jsonDecode(frame.body);
-              if (json is Map<String, dynamic>) {
-                callback(json);
-              }
-            } catch (_) {}
-          }
-        }
-        break;
-
-      case 'ERROR':
-        _handleDisconnectAndScheduleReconnect();
-        break;
-    }
-  }
-
-  void _onError(dynamic error) {
-    _handleDisconnectAndScheduleReconnect();
-  }
-
-  void _onDone() {
-    _handleDisconnectAndScheduleReconnect();
-  }
-
-  void _handleDisconnectAndScheduleReconnect() {
-    _heartbeatTimer?.cancel();
-    _connectFallbackTimer?.cancel();
-    _socket = null;
-    _isSockJs = false;
-    _updateState(StompConnectionState.disconnected);
-
-    if (!_isDisposed) {
-      _reconnectTimer?.cancel();
-      _reconnectTimer = Timer(const Duration(seconds: 5), () {
-        if (!_isDisposed && !isConnected) {
-          connect();
-        }
-      });
-    }
-  }
-
-  void _updateState(StompConnectionState newState) {
-    if (_state != newState) {
-      _state = newState;
-      if (!_stateController.isClosed) {
-        _stateController.add(newState);
-      }
-    }
+  void _subscribe(String destination, String id) {
+    _wire(
+      StompFrame(
+        command: 'SUBSCRIBE',
+        headers: {'id': id, 'destination': destination, 'ack': 'auto'},
+        body: '',
+      ).toWireFormat(),
+    );
   }
 
   String subscribe(String destination, StompMessageCallback callback) {
-    _subscriptions[destination] = callback;
-    final subId = 'sub-${_subIdCounter++}';
-
-    if (isConnected && _socket != null) {
-      final frame = StompFrame(
-        command: 'SUBSCRIBE',
-        headers: {'id': subId, 'destination': destination, 'ack': 'auto'},
-        body: '',
-      );
-      _sendWire(frame.toWireFormat());
-    }
-
+    if (_disposed) return destination;
+    final id = _subscriptions[destination]?.$1 ?? 'sub-${_nextId++}';
+    final existed = _subscriptions.containsKey(destination);
+    _subscriptions[destination] = (id, callback);
+    if (isConnected && !existed) _subscribe(destination, id);
     return destination;
   }
 
   void unsubscribe(String destination) {
-    _subscriptions.remove(destination);
-  }
-
-  void _resubscribeAll() {
-    if (!isConnected || _socket == null) return;
-    var index = 0;
-    _subscriptions.forEach((destination, _) {
-      final frame = StompFrame(
-        command: 'SUBSCRIBE',
-        headers: {
-          'id': 'sub-${index++}',
-          'destination': destination,
-          'ack': 'auto',
-        },
-        body: '',
+    final removed = _subscriptions.remove(destination);
+    if (isConnected && removed != null) {
+      _wire(
+        StompFrame(
+          command: 'UNSUBSCRIBE',
+          headers: {'id': removed.$1},
+          body: '',
+        ).toWireFormat(),
       );
-      _sendWire(frame.toWireFormat());
-    });
+    }
   }
 
   void send(String destination, Map<String, dynamic> body) {
-    if (!isConnected || _socket == null) return;
-
-    final jsonStr = jsonEncode(body);
-    final frame = StompFrame(
-      command: 'SEND',
-      headers: {
-        'destination': destination,
-        'content-type': 'application/json',
-        'content-length': utf8.encode(jsonStr).length.toString(),
-      },
-      body: jsonStr,
+    if (!isConnected) throw StateError('Chat disconnected');
+    final json = jsonEncode(body);
+    _wire(
+      StompFrame(
+        command: 'SEND',
+        headers: {
+          'destination': destination,
+          'content-type': 'application/json',
+          'content-length': utf8.encode(json).length.toString(),
+        },
+        body: json,
+      ).toWireFormat(),
     );
-    _sendWire(frame.toWireFormat());
-  }
-
-  void _startHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (isConnected && _socket != null) {
-        _sendWire('\n'); // STOMP Heartbeat ping
-      }
-    });
   }
 
   void disconnect() {
-    _heartbeatTimer?.cancel();
-    _connectFallbackTimer?.cancel();
-    _reconnectTimer?.cancel();
-    if (_socket != null && isConnected) {
-      final frame = StompFrame(
-        command: 'DISCONNECT',
-        headers: {'receipt': 'bye'},
-        body: '',
-      );
-      _sendWire(frame.toWireFormat());
-      _socket!.close();
-    }
+    ++_generation;
+    _fallback?.cancel();
+    _heartbeat?.cancel();
+    final socket = _socket;
     _socket = null;
-    _isSockJs = false;
-    _updateState(StompConnectionState.disconnected);
+    unawaited(_socketSubscription?.cancel());
+    _socketSubscription = null;
+    if (socket != null) unawaited(socket.close());
+    if (_handshake?.isCompleted == false) _handshake!.complete();
+    _buffer = '';
+    _token = null;
+    _sockJs = false;
+    _setState(StompConnectionState.disconnected);
   }
 
   void dispose() {
-    _isDisposed = true;
+    if (_disposed) return;
+    _disposed = true;
     disconnect();
     _subscriptions.clear();
-    _stateController.close();
+    unawaited(_states.close());
   }
 }

@@ -11,6 +11,8 @@ import '../relationships/social_repository.dart';
 import '../relationships/social_state.dart';
 import '../relationships/social_widgets.dart';
 import '../settings/settings_screen.dart';
+import '../posts/media_viewer.dart';
+import '../posts/post_models.dart';
 import 'edit_profile_screen.dart';
 import 'profile_content_screen.dart';
 import 'profile_controller.dart';
@@ -86,6 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final done = await widget.changes.mutate(
         () => _social!.change(action, _controller.id),
         blockedUserId: action == SocialAction.block ? _controller.id : null,
+        unblockedUserId: action == SocialAction.unblock ? _controller.id : null,
       );
       if (mounted && _social!.lease.active && done) {
         setState(() => _message = 'Đã đối soát và cập nhật quan hệ.');
@@ -259,26 +262,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
   }
 
+  void _viewImage(String? url) {
+    final uri = Uri.tryParse(url ?? '');
+    if (uri == null ||
+        !uri.hasAuthority ||
+        !['http', 'https'].contains(uri.scheme)) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MediaViewer(
+          media: [PostMedia(url: url!, type: 'IMAGE')],
+        ),
+      ),
+    );
+  }
+
   Widget _header(UserProfile profile) => Card(
     clipBehavior: Clip.antiAlias,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (profile.text('cover_url') != null)
-          AppNetworkImage(
-            url: profile.text('cover_url'),
-            height: 144,
-            width: double.infinity,
+          InkWell(
+            onTap: () => _viewImage(profile.text('cover_url')),
+            child: Semantics(
+              label: 'Xem ảnh bìa',
+              button: true,
+              child: AppNetworkImage(
+                url: profile.text('cover_url'),
+                height: 144,
+                width: double.infinity,
+              ),
+            ),
           ),
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppAvatar(
-                imageUrl: profile.text('avatar_url'),
-                name: profile.name,
-                size: 80,
+              InkWell(
+                onTap: (profile.text('avatar_url') ?? '').isEmpty
+                    ? null
+                    : () => _viewImage(profile.text('avatar_url')),
+                child: Semantics(
+                  label: 'Xem ảnh đại diện',
+                  button: true,
+                  child: AppAvatar(
+                    imageUrl: profile.text('avatar_url'),
+                    name: profile.name,
+                    size: 80,
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
               Text(

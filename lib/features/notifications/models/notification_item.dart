@@ -1,3 +1,48 @@
+import '../../../core/errors/app_failure.dart';
+
+/// Result of POST notifications/{id}/read. Swagger uses `read`; the PDF
+/// documents the older `is_read` spelling. Counts are authoritative server data.
+class NotificationReadResult {
+  const NotificationReadResult({
+    required this.notificationId,
+    required this.read,
+    required this.readAt,
+    required this.unreadCount,
+  });
+
+  final String notificationId;
+  final bool read;
+  final DateTime? readAt;
+  final int unreadCount;
+
+  factory NotificationReadResult.fromJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) throw AppFailure.invalidData;
+    final id = raw['notification_id']?.toString();
+    final count = int.tryParse(raw['unread_count']?.toString() ?? '');
+    final flag = raw['read'] ?? raw['is_read'];
+    final read = switch (flag) {
+      true || 'true' => true,
+      false || 'false' => false,
+      _ => null,
+    };
+    final at = DateTime.tryParse(raw['read_at']?.toString() ?? '');
+    if (id == null ||
+        (int.tryParse(id) ?? 0) <= 0 ||
+        count == null ||
+        count < 0 ||
+        read == null ||
+        (read && at == null)) {
+      throw AppFailure.invalidData;
+    }
+    return NotificationReadResult(
+      notificationId: id,
+      read: read,
+      readAt: at,
+      unreadCount: count,
+    );
+  }
+}
+
 class NotificationActor {
   const NotificationActor({
     required this.userId,
@@ -131,8 +176,8 @@ class NotificationListResponse {
   final bool hasNext;
 
   factory NotificationListResponse.fromJson(Object? raw) {
-    if (raw is! Map<String, dynamic>) {
-      return const NotificationListResponse(items: [], unreadCount: 0);
+    if (raw is! Map<String, dynamic> || raw['items'] is! List) {
+      throw AppFailure.invalidData;
     }
 
     final rawItems = raw['items'];

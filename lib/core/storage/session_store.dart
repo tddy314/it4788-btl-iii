@@ -9,19 +9,26 @@ class SessionTokens {
     required this.userId,
     required this.accessToken,
     required this.refreshToken,
+    this.nativeAuth = false,
   });
   final String userId;
   final String accessToken;
   final String refreshToken;
+  // Missing in older records: keep legacy tokens on their original endpoint.
+  final bool nativeAuth;
   Map<String, Object> toJson() => {
     'user_id': userId,
     'access_token': accessToken,
     'refresh_token': refreshToken,
+    'native_auth': nativeAuth,
   };
   static SessionTokens fromJson(Map<String, dynamic> json) {
     final userId = json['user_id'];
     final access = json['access_token'];
     final refresh = json['refresh_token'];
+    if (json.containsKey('native_auth') && json['native_auth'] is! bool) {
+      throw const FormatException('Invalid saved session channel');
+    }
     if (userId is! String ||
         userId.isEmpty ||
         access is! String ||
@@ -34,6 +41,7 @@ class SessionTokens {
       userId: userId,
       accessToken: access,
       refreshToken: refresh,
+      nativeAuth: json['native_auth'] == true,
     );
   }
 }

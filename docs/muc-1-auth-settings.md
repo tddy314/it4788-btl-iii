@@ -1,5 +1,7 @@
 # Mục 1 — nền tảng, xác thực và cài đặt tài khoản
 
+> Tài liệu dưới là bàn giao ban đầu. Hiện trạng auth native, metadata kênh phiên và tài khoản ONBOARDING theo Swagger mới xem [cập nhật 19/11](thay-doi-pdf-2026-11-19.md). Các feature khác đã được ghép; không dùng phần “chưa triển khai” cũ để ghi đè chúng. Mật khẩu mới dùng chữ/số theo PDF; mật khẩu được cấp vẫn gửi nguyên trạng.
+
 Cập nhật 31/10/2026. Tiếp tục dùng khung/core đã có, chỉ thêm `features/auth`, `features/settings` và nối ở `main.dart`. Không triển khai bảng tin, hồ sơ, bạn bè, câu hỏi, chat hoặc thông báo.
 
 ## Luồng chạy

@@ -17,13 +17,16 @@ class SqbApp extends StatefulWidget {
     this.loginBuilder,
     this.tabBuilders = const {},
     this.protectedRoutes = const {},
+    this.navigatorKey,
   }) : startingChild = null;
   const SqbApp.starting({super.key, required Widget child})
     : startingChild = child,
       dependencies = null,
       loginBuilder = null,
       tabBuilders = const {},
-      protectedRoutes = const {};
+      protectedRoutes = const {},
+      navigatorKey = null;
+  final GlobalKey<NavigatorState>? navigatorKey;
   final AppDependencies? dependencies;
   final Widget? startingChild;
   final WidgetBuilder? loginBuilder;
@@ -94,6 +97,7 @@ class _SqbAppState extends State<SqbApp> with WidgetsBindingObserver {
     RouteFactory? onGenerateRoute,
     TransitionBuilder? builder,
   }) => MaterialApp(
+    navigatorKey: widget.navigatorKey,
     key: key,
     title: 'SQB',
     debugShowCheckedModeBanner: false,

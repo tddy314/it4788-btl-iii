@@ -434,6 +434,27 @@ void main() {
     b.dispose();
   });
 
+  test('A timed-out emote post is matched against its normalized server payload without replay', () async {
+    final c = composer(DraftStore(MemoryStore()));
+    await c.restore();
+    c.changeContent('Chào :) https://example.com/a');
+    adapter.respond = (r) async => throw DioException(
+      requestOptions: r,
+      type: DioExceptionType.receiveTimeout,
+    );
+    await c.submit();
+    expect(
+      (adapter.requests.last.data as Map)['content'],
+      'Chào 😊 https://example.com/a',
+    );
+    final saved = {...postJson(), 'content': 'Chào 😊 https://example.com/a'};
+    adapter.respond = (_) async => response(200, pageJson([saved]));
+    expect(await c.reconcile(), isNull);
+    expect(c.matchesReviewedPost(Post.fromJson(saved)), isTrue);
+    expect(adapter.requests.where((r) => r.method == 'POST'), hasLength(1));
+    c.dispose();
+  });
+
   group('Paged cache', () {
     late MemoryStore storage;
     late JsonCache cache;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_scope.dart';
 import 'paged_list_controller.dart';
 import 'question_bank_repository.dart';
+import 'question_bank_cache.dart';
 import 'question_bank_routes.dart';
 import 'question_bank_widgets.dart';
 import 'question_models.dart';
@@ -32,7 +33,10 @@ class _MySubmissionsViewState extends State<MySubmissionsView>
     _controller = PagedListController<SubmissionSummary>(
       fetch: _fetcher(null),
       idOf: (item) => item.sessionId,
-      cache: dependencies.cache,
+      cache: QuestionBankCache(
+        drafts: dependencies.drafts,
+        legacy: dependencies.cache,
+      ),
       userId: dependencies.session.tokens?.userId,
       encode: (item) => item.toJson(),
       decode: SubmissionSummary.fromJson,

@@ -16,6 +16,9 @@ import '../posts/posts_list_screen.dart';
 import '../posts/posts_repository.dart';
 import '../posts/picker_recovery.dart';
 import 'feed_repository.dart';
+import '../relationships/social_scope.dart';
+import '../relationships/social_state.dart';
+import '../search/post_search_screen.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -33,6 +36,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   int _newCount = 0;
   String? _countError;
   DateTime _since = DateTime.now();
+  SocialChanges? _social;
+  int _socialRevision = 0;
+  final _blocked = <String>{};
+  bool _visible(FeedItem e) =>
+      !_blocked.contains(e.actor.id.toString()) &&
+      !_blocked.contains(e.post?.author.id.toString());
   @override
   void initState() {
     super.initState();
@@ -43,6 +52,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final social = SocialScope.maybeOf(context);
+    if (_social != social) {
+      _social?.removeListener(_socialChanged);
+      _social = social;
+      _socialRevision = social?.revision ?? 0;
+      _social?.addListener(_socialChanged);
+    }
     if (_controller != null) return;
     final d = AppScope.of(context);
     _feed = FeedRepository(d.api, onPostUnavailable: _remove);
@@ -55,11 +71,32 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       resource: 'feed/home-v1',
       encode: (e) => e.toJson(),
       decode: FeedItem.fromJson,
-      cacheable: (e) => e.post == null || e.post!.visibility == 'PUBLIC',
+      cacheable: (e) =>
+          _visible(e) && (e.post == null || e.post!.visibility == 'PUBLIC'),
     );
     _controller!.addListener(_changed);
     unawaited(_controller!.start());
     WidgetsBinding.instance.addPostFrameCallback((_) => _recoverPicker());
+  }
+
+  void _socialChanged() {
+    final social = _social;
+    if (!mounted ||
+        social == null ||
+        social.busy ||
+        _socialRevision == social.revision) {
+      return;
+    }
+    _socialRevision = social.revision;
+    if (social.lastMutationConfirmed && social.lastBlockedUserId != null) {
+      _blocked.add(social.lastBlockedUserId!);
+    }
+    if (social.lastMutationConfirmed && social.lastUnblockedUserId != null) {
+      _blocked.remove(social.lastUnblockedUserId);
+    }
+    setState(() {});
+    unawaited(_controller?.persist());
+    unawaited(_controller?.refresh());
   }
 
   Future<void> _recoverPicker() async {
@@ -175,6 +212,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _social?.removeListener(_socialChanged);
     WidgetsBinding.instance.removeObserver(this);
     _scroll.dispose();
     _countCancel.cancel();
@@ -187,12 +225,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final c = _controller;
     if (c == null) return const AppLoadingState();
+    final items = c.items.where(_visible).toList();
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: c.items.length + 2,
+        itemCount: items.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
             return Padding(
@@ -200,6 +239,16 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const PostSearchScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.search),
+                    label: const Text('Tìm bài viết'),
+                  ),
+                  const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: _compose,
                     icon: const Icon(Icons.edit_outlined),
@@ -252,7 +301,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                     Text('Đang xem bản lưu lúc ${postTime(c.savedAt)}'),
                   if (c.storageWarning != null) Text(c.storageWarning!),
                   if (c.failure != null)
-                    if (c.items.isEmpty)
+                    if (items.isEmpty)
                       AppErrorState(
                         message: c.failure!.message,
                         onRetry: _refresh,
@@ -273,12 +322,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               ),
             );
           }
-          if (index == c.items.length + 1) {
+          if (index == items.length + 1) {
             if (!c.initialized) return const AppLoadingState();
             if (c.failure != null || c.cached) {
               return const SizedBox(height: 24);
             }
-            if (c.items.isEmpty && !c.busy && !c.hasNext && c.failure == null) {
+            if (items.isEmpty && !c.busy && !c.hasNext && c.failure == null) {
               return const AppEmptyState(
                 title: 'Bảng tin chưa có hoạt động',
                 message: 'Bạn có thể tạo bài viết đầu tiên hoặc quay lại sau.',
@@ -296,7 +345,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             return Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                c.items.isEmpty
+                items.isEmpty
                     ? ''
                     : c.items.length >= 200
                     ? 'Đã tải 200 hoạt động. Kéo xuống để làm mới.'
@@ -305,7 +354,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               ),
             );
           }
-          final item = c.items[index - 1];
+          final item = items[index - 1];
           if (item.post != null) {
             return PostCard(
               key: ValueKey('post-${item.id}'),

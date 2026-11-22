@@ -84,7 +84,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Nhập mật khẩu hiện tại và xác nhận mật khẩu mới.',
+                    'Nhập mật khẩu hiện tại và xác nhận mật khẩu mới. Mật khẩu mới chỉ gồm chữ cái A–Z, a–z và chữ số.',
                   ),
                   const SizedBox(height: 24),
                   AppTextField(

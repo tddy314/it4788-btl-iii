@@ -1,4 +1,6 @@
-enum MessageStatus { sending, sent, failed }
+import '../../../core/errors/app_failure.dart';
+
+enum MessageStatus { sending, sent, failed, unconfirmed }
 
 enum MessageType { text, image }
 
@@ -37,6 +39,8 @@ class ChatMessage {
     String? messageId,
     MessageStatus? status,
     bool? isRead,
+    List<String>? mediaUrls,
+    String? content,
   }) => ChatMessage(
     messageId: messageId ?? this.messageId,
     clientMsgId: clientMsgId,
@@ -44,9 +48,9 @@ class ChatMessage {
     senderId: senderId,
     senderName: senderName,
     avatarUrl: avatarUrl,
-    content: content,
+    content: content ?? this.content,
     messageType: messageType,
-    mediaUrls: mediaUrls,
+    mediaUrls: mediaUrls ?? this.mediaUrls,
     createdAt: createdAt,
     status: status ?? this.status,
     isRead: isRead ?? this.isRead,
@@ -72,7 +76,19 @@ class ChatMessage {
         : MessageType.text;
 
     final readBy = json['read_by'];
-    final isRead = readBy is List && readBy.isNotEmpty;
+    final sender =
+        (json['sender_id'] ??
+                (json['sender'] is Map ? json['sender']['user_id'] : null))
+            ?.toString();
+    final isRead =
+        json['is_read'] == true ||
+        readBy is List &&
+            readBy.any(
+              (reader) =>
+                  reader is Map &&
+                  reader['user_id'] != null &&
+                  reader['user_id'].toString() != sender,
+            );
 
     return ChatMessage(
       messageId: json['message_id']?.toString() ?? '',
@@ -101,6 +117,19 @@ class ChatMessage {
     );
   }
 
+  /// Server DTOs are confirmed; local records must preserve their send state.
+  factory ChatMessage.fromCache(Map<String, dynamic> json) {
+    final message = ChatMessage.fromJson(json);
+    final status = MessageStatus.values
+        .where((e) => e.name == json['status'])
+        .firstOrNull;
+    return message.copyWith(
+      status: status == MessageStatus.sending
+          ? MessageStatus.unconfirmed
+          : status ?? MessageStatus.unconfirmed,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'message_id': messageId,
     'client_msg_id': clientMsgId,
@@ -123,16 +152,20 @@ class ChatMessagesResponse {
     required this.messages,
     this.after,
     this.hasNext = false,
+    this.conversationType = 'DIRECT',
   });
 
   final String conversationId;
   final List<ChatMessage> messages;
+  final String conversationType;
   final String? after;
   final bool hasNext;
 
   factory ChatMessagesResponse.fromJson(Object? raw) {
-    if (raw is! Map<String, dynamic>) {
-      return const ChatMessagesResponse(conversationId: '', messages: []);
+    if (raw is! Map<String, dynamic> ||
+        raw['messages'] is! List ||
+        raw['conversation_id'] == null) {
+      throw AppFailure.invalidData;
     }
 
     final convId = raw['conversation_id']?.toString() ?? '';
@@ -141,7 +174,12 @@ class ChatMessagesResponse {
     if (rawMsgs is List) {
       for (final m in rawMsgs) {
         if (m is Map<String, dynamic>) {
-          list.add(ChatMessage.fromJson(m));
+          list.add(
+            ChatMessage.fromJson({
+              ...m,
+              'conversation_id': m['conversation_id'] ?? convId,
+            }),
+          );
         }
       }
     }
@@ -150,6 +188,7 @@ class ChatMessagesResponse {
 
     return ChatMessagesResponse(
       conversationId: convId,
+      conversationType: raw['conversation_type']?.toString() ?? 'DIRECT',
       messages: list,
       after: pagination?['after']?.toString(),
       hasNext: pagination?['has_next'] as bool? ?? false,
@@ -159,6 +198,7 @@ class ChatMessagesResponse {
   Map<String, dynamic> toJson() => {
     'conversation_id': conversationId,
     'messages': messages.map((e) => e.toJson()).toList(),
+    'conversation_type': conversationType,
     'pagination': {'after': after, 'has_next': hasNext},
   };
 }
