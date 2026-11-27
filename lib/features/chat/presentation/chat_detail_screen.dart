@@ -257,6 +257,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     ),
                   ],
                 ),
+              if (controller.isDeleting) const LinearProgressIndicator(),
               // Khu vực danh sách tin nhắn
               Expanded(child: _buildMessagesArea(context, controller)),
 
@@ -379,93 +380,77 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         }
 
         final message = controller.messages[index];
-        return ChatMessageBubble(
-          message: message,
-          currentUserId: controller.userId,
-          onRetry: () => message.status == MessageStatus.unconfirmed
-              ? _verifyUnconfirmed(message)
-              : controller.retryFailedMessage(message),
+        return GestureDetector(
+          onLongPress: message.messageId.isEmpty || controller.isDeleting
+              ? null
+              : () => _showMessageActions(message),
+          child: ChatMessageBubble(
+            message: message,
+            currentUserId: controller.userId,
+            onRetry: () => controller.retryFailedMessage(message),
+          ),
         );
       },
     );
   }
 
-  Future<void> _verifyUnconfirmed(ChatMessage message) async {
+  Future<void> _showMessageActions(ChatMessage message) async {
     final controller = _controller;
-    if (controller == null) return;
-    await controller.reconnect();
-    if (!mounted) return;
-    if (controller.errorMessage != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(controller.errorMessage!)));
-      return;
-    }
-    if (!controller.messages.any(
-      (m) => m.messageId.isEmpty && m.clientMsgId == message.clientMsgId,
-    )) {
-      return;
-    }
-    final confirmed = controller.messages
-        .where((m) => m.messageId.isNotEmpty && m.senderId == controller.userId)
-        .take(30)
-        .toList();
-    final selected = await showModalBottomSheet<String>(
+    if (controller == null || controller.isDeleting) return;
+    final scope = await showModalBottomSheet<MessageDeleteScope>(
       context: context,
-      isScrollControlled: true,
-      builder: (context) => FractionallySizedBox(
-        heightFactor: 0.75,
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                'Đối chiếu tin chưa xác nhận',
-                style: Theme.of(context).textTheme.titleLarge,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Xóa ở phía tôi'),
+              onTap: () => Navigator.pop(context, MessageDeleteScope.me),
+            ),
+            if (message.isMine(controller.userId))
+              ListTile(
+                leading: const Icon(Icons.undo),
+                title: const Text('Thu hồi với mọi người'),
+                onTap: () =>
+                    Navigator.pop(context, MessageDeleteScope.everyone),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Chọn đúng tin bạn đã gửi trong lịch sử máy chủ để liên kết với bản cục bộ. App không tự đoán và không gửi lại tin.',
-              ),
-              const SizedBox(height: 8),
-              for (final item in confirmed)
-                ListTile(
-                  leading: Icon(
-                    item.messageType == MessageType.image
-                        ? Icons.image_outlined
-                        : Icons.chat_bubble_outline,
-                  ),
-                  title: Text(
-                    item.content,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    'Tin #${item.messageId} · ${item.createdAt.toLocal()}',
-                  ),
-                  onTap: () => Navigator.pop(context, item.messageId),
-                ),
-              if (confirmed.isEmpty)
-                const Text(
-                  'Chưa thấy tin đã gửi trong phần lịch sử hiện tại. Bạn có thể tải thêm tin cũ rồi kiểm tra lại.',
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, 'discard-local'),
-                child: const Text('Bỏ bản cục bộ, không xóa tin trên máy chủ'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Giữ bản cục bộ'),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
-    if (!mounted) return;
-    if (selected == 'discard-local') {
-      await controller.discardUnconfirmed(message.clientMsgId);
-    } else if (selected != null) {
-      await controller.reconcileUnconfirmed(message.clientMsgId, selected);
-    }
+    if (!mounted || scope == null) return;
+    final everyone = scope == MessageDeleteScope.everyone;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(everyone ? 'Thu hồi tin nhắn?' : 'Xóa tin nhắn?'),
+        content: Text(
+          everyone
+              ? 'Tin nhắn sẽ được thu hồi với mọi người trong cuộc trò chuyện.'
+              : 'Tin nhắn chỉ bị xóa ở phía bạn. Người còn lại vẫn có thể xem.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(everyone ? 'Thu hồi' : 'Xóa'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    final success = await controller.deleteMessage(message, scope);
+    if (!mounted || !success) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          everyone ? 'Đã thu hồi tin nhắn.' : 'Đã xóa tin nhắn ở phía bạn.',
+        ),
+      ),
+    );
   }
 }

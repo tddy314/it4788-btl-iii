@@ -20,7 +20,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../support/fakes.dart';
 import 'auth/auth_test.dart' show AuthAdapter, response;
-import 'chat/chat_flows_test.dart' show TestChatRepository, controller, message;
 import 'question_bank/qb_fakes.dart' show detailJson, practiceJson;
 
 void main() {
@@ -279,33 +278,4 @@ void main() {
       await directory.delete();
     }
   });
-
-  test(
-    'An explicit selected server ID reconciles a draft without another write',
-    () async {
-      final repo = TestChatRepository();
-      final chat = controller(repo);
-      await chat.initialize();
-      await chat.sendTextMessage('Hai tin có thể có cùng nội dung');
-      await Future<void>.delayed(const Duration(milliseconds: 40));
-      final local = chat.messages.single;
-      repo.stomp.emit(message(901, content: local.content));
-      repo.stomp.emit(message(902, content: local.content));
-      repo.stomp.emit({...message(903), 'sender_id': 8});
-      expect(chat.messages.length, 4);
-      expect(
-        await chat.reconcileUnconfirmed(local.clientMsgId, '903'),
-        isFalse,
-      );
-      expect(
-        await chat.reconcileUnconfirmed(local.clientMsgId, 'unknown'),
-        isFalse,
-      );
-      expect(await chat.reconcileUnconfirmed(local.clientMsgId, '901'), isTrue);
-      expect(chat.messages.length, 3);
-      expect(chat.messages.where((m) => m.messageId.isEmpty), isEmpty);
-      expect(repo.sends, 1);
-      chat.dispose();
-    },
-  );
 }

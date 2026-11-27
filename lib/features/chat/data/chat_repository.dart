@@ -209,6 +209,54 @@ class ChatRepository {
     );
   }
 
+  Future<MessageDeleteResult> deleteMessage(
+    String messageId,
+    MessageDeleteScope scope,
+  ) async {
+    final id = int.tryParse(messageId);
+    if (id == null || id <= 0) throw AppFailure.invalidData;
+    if (!isActive) throw AppFailure.unauthorized;
+    final result = await api.request(
+      'messages/$id',
+      method: 'DELETE',
+      data: {'scope': scope.wire},
+      decode: MessageDeleteResult.fromJson,
+    );
+    if (!isActive) throw AppFailure.unauthorized;
+    if (result.messageId != id.toString() || result.scope != scope) {
+      throw AppFailure.invalidData;
+    }
+    // A direct link can open chat without a conversations controller alive.
+    // Redact its old preview on disk as well; storage failure cannot undo a
+    // mutation that the server has already confirmed.
+    try {
+      final userId = _userId!;
+      final cached = await loadCachedConversations(userId);
+      if (isActive && cached != null) {
+        await saveCachedConversations(
+          userId,
+          ConversationListResponse(
+            items: cached.items
+                .map(
+                  (item) => item.lastMessageId == result.messageId
+                      ? item.copyWith(
+                          lastMessageContent: 'Tin nhắn không còn hiển thị.',
+                        )
+                      : item,
+                )
+                .toList(),
+            after: cached.after,
+            nextCursor: cached.nextCursor,
+            hasNext: cached.hasNext,
+          ),
+        );
+      }
+    } catch (_) {
+      // Keep the server confirmation even when local storage is unavailable.
+    }
+    return result;
+  }
+
   // 4. Gửi tin nhắn qua STOMP WebSocket
   void sendStompMessage({
     required String conversationId,

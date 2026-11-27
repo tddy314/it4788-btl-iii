@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../app/app_scope.dart';
 import '../../core/errors/app_failure.dart';
 import '../../core/widgets/app_states.dart';
-import 'comments_screen.dart';
 import 'post_card.dart';
 import 'post_composer_screen.dart';
 import 'post_models.dart';
@@ -122,15 +121,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  Future<void> _comments() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CommentsScreen(postId: widget.id),
-      ),
-    );
-    if (mounted) await _load();
-  }
-
   @override
   void dispose() {
     _cancel.cancel();
@@ -211,7 +201,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   widget.onUnavailable?.call();
                   unawaited(_load());
                 },
-                onComments: _comments,
               ),
           ],
         ),

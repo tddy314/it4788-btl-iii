@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/errors/app_failure.dart';
 import '../data/chat_repository.dart';
+import '../data/chat_changes.dart';
 import '../models/chat_event.dart';
 import '../models/conversation_item.dart';
 
@@ -24,6 +25,8 @@ class ConversationsController extends ChangeNotifier {
       _hasNext = false;
   int _generation = 0;
   Timer? _eventRefresh;
+  StreamSubscription<ChatMessageRemoval>? _removals;
+  final _removedPreviews = <String>{};
   String? _errorMessage, _after, _cursor;
   bool get _active => !_disposed && _isCurrent();
   List<ConversationItem> get items => List.unmodifiable(_items);
@@ -37,11 +40,24 @@ class ConversationsController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    _removals ??= ChatChanges.removals.listen((event) {
+      if (!_active || event.userId != userId) return;
+      _removedPreviews.add(event.messageId);
+      while (_removedPreviews.length > 200) {
+        _removedPreviews.remove(_removedPreviews.first);
+      }
+      _items = _items.map(_safePreview).toList();
+      _notify();
+      unawaited(_savePreviewChanges());
+    });
     try {
       final cached = await repository.loadCachedConversations(userId);
       if (!_active) return;
       if (cached != null) {
-        _items = cached.items.where((e) => e.type == 'DIRECT').toList();
+        _items = cached.items
+            .where((e) => e.type == 'DIRECT')
+            .map(_safePreview)
+            .toList();
         _notify();
       }
     } catch (_) {
@@ -86,7 +102,10 @@ class ConversationsController extends ChangeNotifier {
     try {
       final page = await repository.fetchConversations(limit: 20);
       if (!_active || generation != _generation) return;
-      _items = page.items.where((e) => e.type == 'DIRECT').toList();
+      _items = page.items
+          .where((e) => e.type == 'DIRECT')
+          .map(_safePreview)
+          .toList();
       _after = page.after;
       _cursor = page.nextCursor;
       _hasNext = page.hasNext;
@@ -146,9 +165,9 @@ class ConversationsController extends ChangeNotifier {
       if (!_active || generation != _generation) return;
       final ids = _items.map((e) => e.conversationId).toSet();
       _items.addAll(
-        page.items.where(
-          (e) => e.type == 'DIRECT' && ids.add(e.conversationId),
-        ),
+        page.items
+            .where((e) => e.type == 'DIRECT' && ids.add(e.conversationId))
+            .map(_safePreview),
       );
       _after = page.after;
       _cursor = page.nextCursor;
@@ -200,8 +219,31 @@ class ConversationsController extends ChangeNotifier {
     _disposed = true;
     ++_generation;
     _eventRefresh?.cancel();
+    unawaited(_removals?.cancel());
     repository.stomp?.unsubscribe('/user/queue/messages');
     repository.stomp?.disconnect();
     super.dispose();
+  }
+
+  ConversationItem _safePreview(ConversationItem item) =>
+      _removedPreviews.contains(item.lastMessageId)
+      ? item.copyWith(lastMessageContent: 'Tin nhắn không còn hiển thị.')
+      : item;
+
+  Future<void> _savePreviewChanges() async {
+    try {
+      if (!_active) return;
+      await repository.saveCachedConversations(
+        userId,
+        ConversationListResponse(
+          items: _items,
+          after: _after,
+          nextCursor: _cursor,
+          hasNext: _hasNext,
+        ),
+      );
+    } catch (_) {
+      // The confirmed server mutation still succeeds when a cache write fails.
+    }
   }
 }

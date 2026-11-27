@@ -4,6 +4,30 @@ enum MessageStatus { sending, sent, failed, unconfirmed }
 
 enum MessageType { text, image }
 
+enum MessageDeleteScope {
+  me('ME'),
+  everyone('EVERYONE');
+
+  const MessageDeleteScope(this.wire);
+  final String wire;
+}
+
+class MessageDeleteResult {
+  const MessageDeleteResult(this.messageId, this.scope);
+  final String messageId;
+  final MessageDeleteScope scope;
+
+  factory MessageDeleteResult.fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) throw AppFailure.invalidData;
+    final id = value['message_id'];
+    final scope = MessageDeleteScope.values
+        .where((s) => s.wire == value['scope'])
+        .firstOrNull;
+    if (id is! int || id <= 0 || scope == null) throw AppFailure.invalidData;
+    return MessageDeleteResult(id.toString(), scope);
+  }
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.messageId,
@@ -18,6 +42,7 @@ class ChatMessage {
     required this.createdAt,
     this.status = MessageStatus.sent,
     this.isRead = false,
+    this.revoked = false,
   });
 
   final String messageId;
@@ -32,6 +57,7 @@ class ChatMessage {
   final DateTime createdAt;
   final MessageStatus status;
   final bool isRead;
+  final bool revoked;
 
   bool isMine(String currentUserId) => senderId == currentUserId;
 
@@ -54,6 +80,7 @@ class ChatMessage {
     createdAt: createdAt,
     status: status ?? this.status,
     isRead: isRead ?? this.isRead,
+    revoked: revoked,
   );
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -71,6 +98,7 @@ class ChatMessage {
     }
 
     final typeStr = json['message_type']?.toString().toUpperCase();
+    final revoked = json['revoked'] == true || json['hidden'] == true;
     final messageType = typeStr == 'IMAGE'
         ? MessageType.image
         : MessageType.text;
@@ -108,12 +136,13 @@ class ChatMessage {
       avatarUrl:
           json['avatar_url'] as String? ??
           json['sender']?['avatar_url'] as String?,
-      content: json['content'] as String? ?? '',
+      content: revoked ? '' : json['content'] as String? ?? '',
       messageType: messageType,
-      mediaUrls: mediaList,
+      mediaUrls: revoked ? const [] : mediaList,
       createdAt: parseDate(json['created_at']),
       status: MessageStatus.sent,
       isRead: isRead,
+      revoked: revoked,
     );
   }
 
@@ -143,6 +172,7 @@ class ChatMessage {
     'created_at': createdAt.toIso8601String(),
     'status': status.name,
     'is_read': isRead,
+    'revoked': revoked,
   };
 }
 

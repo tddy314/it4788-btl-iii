@@ -1,5 +1,9 @@
 # Rà soát PDF mới ngày 19/11/2026
 
+**Trạng thái code mới nhất: xem mục “Hoàn thiện và kiểm tra ngày 22/11/2026” cuối tài liệu.** Các kết luận “chưa có xóa/thu hồi tin nhắn” ở lượt 20/11 là phát hiện trước khi bổ sung, không còn là hiện trạng code.
+
+**Điều chỉnh phạm vi ngày 22/11:** đã gỡ giao diện chọn ID/liên kết tin và thao tác bỏ bản cục bộ do AI tự thêm ngoài PDF. Chạm trạng thái chưa xác nhận chỉ tải lại lịch sử, không mở công cụ đối soát và không gửi lại. Các mô tả “đối chiếu thủ công” ở các đợt dưới là lịch sử đã bị thay thế; không khôi phục tính năng này. Việc gỡ giao diện không được coi là đã giải quyết hạn chế xác nhận tự động của giao thức chat.
+
 **Đã có đợt cập nhật code tiếp sau phần rà soát ban đầu.** Xem mục “Code đã cập nhật” ở cuối tài liệu để biết trạng thái mới nhất. Các mục phát hiện phía trên mô tả thời điểm trước khi sửa.
 
 Nguồn: `C:\Users\ThinkPad\Downloads\Social Network for Student-Generated Question Bank.pptx (2).pdf` (207 trang), đã lưu vào [PDF hiện hành trong repository](<Social Network for Student-Generated Question Bank-2026-11-19.pdf>), so với `docs/Social Network for Student-Generated Question Bank.pptx.pdf` (208 trang). Số trang dưới đây là vị trí trang trong PDF mới, bắt đầu từ 1.
@@ -92,3 +96,38 @@ Build bản cuối thành công: debug x86_64 (191 giây) và release ARM64 kho�
 Không kết luận đủ hoàn thành: còn thao tác xóa/thu hồi chat; push chưa có cấu hình; xác nhận gửi chat tự động chưa có cơ chế tương quan được tài liệu bảo đảm; QUESTION chưa mở đúng chi tiết; chưa nghiệm thu hai máy thật/mạng/media. Những phần đã loại rõ khỏi phạm vi (đăng ký/OTP/reset do thầy xử lý, iOS, nhóm/GIF, admin/AI/minigame, lịch sử tìm kiếm) không tính là thiếu trong phạm vi người dùng đã chốt. Chưa có căn cứ tính tỷ lệ 70% hoặc cam kết điểm chấm.
 
 Lượt 20/11 chỉ đọc/đối chiếu và cập nhật báo cáo, không sửa source Dart hoặc gọi API ghi. Kết quả tự động gần nhất vẫn là 203 test/analyze/build ngày 19/11; không chạy lại bộ kiểm tra đã đạt khi chưa có thay đổi source.
+
+## Hoàn thiện và kiểm tra ngày 22/11/2026
+
+### Phần đã bổ sung/sửa
+
+- Nhấn giữ tin đã được server xác nhận để **Xóa ở phía tôi** hoặc **Thu hồi với mọi người**. Chỉ tin của chính mình có lựa chọn thu hồi. Có bước xác nhận và loading; không xóa trước server, không hiển thị thành công từ việc gửi request đơn thuần.
+- Gọi `DELETE /messages/{id}` với JSON `scope: ME | EVERYONE`; kiểm tra response đúng `message_id` và `scope`. Không thêm sửa/reaction/trả lời tin hoặc các API nhóm ngoài phạm vi.
+- Nếu kết quả DELETE chưa rõ, lưu dấu thao tác trong `DraftStore` theo tài khoản và không replay. Chỉ GET khởi chạy sau thao tác mới được dùng để kiểm tra kết quả. Không suy vắng mặt trên một trang phân trang là đã xóa toàn bộ; không lộ kết quả tài khoản cũ sau đổi phiên.
+- Chặn dữ liệu đã xóa xuất hiện trở lại qua GET cũ, load-more hoặc sự kiện lặp. Đọc cờ `MessageDto.revoked`, loại nội dung/media thu hồi khỏi timeline/cache. Dữ liệu tin nhắn sai kiểu được xử lý bằng trạng thái lỗi thay vì làm vỡ callback socket.
+- Đồng bộ dòng xem trước hội thoại khi xóa, kể cả refresh danh sách thất bại do offline. Có sự kiện nội bộ chỉ trong feature chat, tách theo user và dispose subscription; không sửa router/theme/core. Repo cũng làm sạch preview cache khi mở chat trực tiếp mà không có màn danh sách đang chạy.
+- Đã gỡ công cụ chọn ID/ghép/bỏ bản cục bộ ngoài PDF. Không đưa lại công cụ này dưới tên tính năng kiểm thử.
+
+### Độ đầy đủ trong phạm vi đã chốt
+
+| Nhóm | Code hiện có | Điểm còn phải kiểm chứng/giới hạn |
+| --- | --- | --- |
+| Tài khoản | Login native, cặp token/kênh phiên, khôi phục offline, refresh/logout, đổi mật khẩu | Tài khoản thầy cấp cần ACTIVE; app thông báo liên hệ giảng viên khi nhận ONBOARDING, không tự mở OTP/admin/reset. |
+| Bảng tin/bài viết | Phân trang/refresh/cache, tìm bài, đăng/sửa/xóa, Like/bình luận/báo cáo, chụp/chọn 4 ảnh tĩnh, xem ảnh và video giảng viên | Thứ tự ưu tiên bạn bè và tìm toàn văn/đảo từ thuộc xử lý server; cần dữ liệu thật để kiểm chứng. |
+| Hồ sơ/quan hệ | Xem/sửa hồ sơ, viewer ảnh, tìm người, bạn bè/lời mời/follow/chặn/bỏ chặn | Cần thử hai tài khoản để xác nhận quyền cả hai chiều và các thay đổi đồng thời trên server. |
+| Ngân hàng câu hỏi | Lớp học phần đang học, đề xuất tối thiểu 3 câu theo schema, nguồn gốc, sửa/xóa/theo dõi, luyện tập/trả lời/đánh giá 0–4/báo lỗi | Không tự thêm màn/endpoint theo bảng API PDF khi Swagger không có; kho luyện tập theo phiên không được gọi là đã có danh sách câu hỏi theo từng người. |
+| Chat 1–1 | Text/ảnh/emote, lịch sử/cache/nháp, typing/read receipt, xóa/thu hồi hai scope | Luồng gửi có thể còn bản chưa xác nhận nếu server không trả mã tương quan; đây là hạn chế tích hợp cần kiểm chứng, không phải tính năng mới trong PDF. Không báo “Đã gửi” giả hoặc tự ghép theo nội dung. |
+| Thông báo/cài đặt | Danh sách/lọc/phân trang/cache, đọc từng mục/tất cả đúng response server, SESSION theo quyền, boolean cài đặt, thu âm/nghe thử | QUESTION còn vào ngân hàng vì target chưa có session ID/lookup trực tiếp. Push chưa nhận thật vì chưa có cấu hình Firebase project của thầy. |
+| Offline/vòng đời | Validate trước mạng, giữ cache/input/nháp, timeout, không replay ghi, giới hạn tài nguyên, session và dữ liệu theo user | Mock kiểm tra được các nhánh đã nêu nhưng chưa thay thế thử chế độ máy bay, Wi-Fi/4G, process death, quyền và media trên điện thoại vật lý. |
+
+Đăng ký/OTP/reset do thầy xử lý; iOS, backend/admin/AI/minigame; nhóm/GIF/tag/reaction ngoài Like; lịch sử tìm kiếm và công cụ đối chiếu ID đều không được tự bổ sung. Sự kiện huy hiệu hoặc bài có `SQB_SEED` do API bảng tin cung cấp không đồng nghĩa app tự thêm minigame hoặc dữ liệu giả.
+
+### Kiểm chứng
+
+**213 test đạt**, analyze sạch. Log `.dart_tool/complete-22-tests.log`, `.dart_tool/complete-22-analyze.log`; kiểm thử bổ sung cho xác nhận DELETE, bấm lặp, quyền thu hồi, timeout/lưu marker qua mở lại, phân trang, dữ liệu cũ, preview offline/tách tài khoản và cờ revoked. Không gọi API ghi nghiệp vụ hay gửi tin tới người khác trong đợt này.
+
+Swagger tải lại ngày 22/11 tại `.dart_tool/swagger-2026-11-22.json`: thay đổi cấu trúc so với 20/11 thuộc reset tài khoản quản trị, xuất đề và các schema nhập/cấp tài khoản. Không mở thêm chức năng frontend ngoài phạm vi vì những thay đổi đó. PDF hiện hành vẫn là bản 207 trang đã lưu trong repository, có tính đến chữ đỏ/chú thích thầy xử lý thay.
+
+Chưa thể xác nhận “đủ nghiệm thu”: còn cấu hình/payload push, điều hướng chi tiết QUESTION, kiểm chứng gửi/nhận chat thực tế và bộ kịch bản trên hai điện thoại thật. Không tính tỷ lệ hoàn thành/điểm chấm dựa trên số test.
+
+APK bản cuối 22/11 đã build thành công sau sửa phân trang/preview: debug x86_64 (34,6 giây) và release ARM64 khoảng 22,2 MB (77,7 giây), log `.dart_tool/complete-22-debug.log`, `.dart_tool/complete-22-release.log`. Giữ cấu hình ký debug hiện có cho bài tập; không coi build thành công là nghiệm thu native/storage/media. File tại `build/app/outputs/flutter-apk/app-debug.apk` và `app-release.apk`. Chưa cài/chạy lại bản cuối trên điện thoại thật trong đợt này.

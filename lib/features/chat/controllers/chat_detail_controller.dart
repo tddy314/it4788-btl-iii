@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/storage/draft_store.dart';
 import '../data/chat_repository.dart';
+import '../data/chat_changes.dart';
 import '../models/chat_event.dart';
 import '../models/chat_message.dart';
 import '../data/stomp_client.dart';
@@ -42,6 +43,13 @@ class ChatDetailController extends ChangeNotifier {
   String _draftText = '';
   final _acks = <String, Timer>{};
   final _sending = <String>{};
+  final _deleting = <String>{};
+  final _pendingDeletes = <String, MessageDeleteScope>{};
+  final _removed = <String>{};
+  int _deleteEpoch = 0;
+  int? _historyEpoch;
+  final _freshHistoryIds = <String>{};
+  bool get isDeleting => _deleting.isNotEmpty;
   final _uploadCancel = CancelToken();
   Timer? _typingTimer, _typingDebounce;
   StreamSubscription<StompConnectionState>? _socketStates;
@@ -85,6 +93,18 @@ class ChatDetailController extends ChangeNotifier {
       final draft = await draftStore.read(userId: userId, name: _draftKey);
       if (!_active) return;
       _draftText = draft?['text'] is String ? draft!['text'] as String : '';
+      final deletes = draft?['pending_deletes'];
+      if (deletes is Map) {
+        for (final entry in deletes.entries.take(10)) {
+          final id = entry.key.toString();
+          final scope = MessageDeleteScope.values
+              .where((s) => s.wire == entry.value)
+              .firstOrNull;
+          if ((int.tryParse(id) ?? 0) > 0 && scope != null) {
+            _pendingDeletes[id] = scope;
+          }
+        }
+      }
       final outbox = (draft?['outbox'] as List? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(ChatMessage.fromCache)
@@ -96,6 +116,7 @@ class ChatDetailController extends ChangeNotifier {
       if (!_active) return;
       final byId = <String, ChatMessage>{};
       for (final m in [...?cached, ...outbox]) {
+        if (m.revoked) continue;
         byId[m.messageId.isEmpty ? 'local:${m.clientMsgId}' : m.messageId] = m;
       }
       _messages = byId.values.toList()
@@ -161,7 +182,14 @@ class ChatDetailController extends ChangeNotifier {
     final data = event.data;
     switch (event.type) {
       case ChatEventType.message:
-        final m = ChatMessage.fromJson(data);
+        final ChatMessage m;
+        try {
+          m = ChatMessage.fromJson(data);
+        } catch (_) {
+          _errorMessage = 'Dữ liệu tin nhắn không hợp lệ. Hãy tải lại lịch sử.';
+          _notify();
+          return;
+        }
         if (m.messageId.isEmpty || m.senderId.isEmpty) return;
         _mergeMessage(m);
         if (!m.isMine(userId)) _read(m.messageId);
@@ -195,6 +223,10 @@ class ChatDetailController extends ChangeNotifier {
         }).toList();
       case ChatEventType.revoked:
         final id = data['message_id']?.toString();
+        if (id != null) {
+          _recordRemoved(id);
+          _pendingDeletes.remove(id);
+        }
         _messages = _messages.where((m) => m.messageId != id).toList();
       case ChatEventType.accessChanged:
         unawaited(fetchFirstPage());
@@ -221,6 +253,13 @@ class ChatDetailController extends ChangeNotifier {
   }
 
   void _mergeMessage(ChatMessage message) {
+    if (message.revoked && message.messageId.isNotEmpty) {
+      _recordRemoved(message.messageId);
+      _pendingDeletes.remove(message.messageId);
+      _messages.removeWhere((m) => m.messageId == message.messageId);
+      return;
+    }
+    if (_removed.contains(message.messageId)) return;
     // Never merge confirmed messages by text/time; identical messages are valid.
     final index = _messages.indexWhere(
       (m) =>
@@ -247,6 +286,7 @@ class ChatDetailController extends ChangeNotifier {
   Future<void> fetchFirstPage({bool showLoading = true}) async {
     if (!_active || _isLoading) return;
     final generation = ++_generation;
+    final deleteEpoch = _deleteEpoch;
     _isLoading = true;
     _isLoadingEarlier = false;
     _notify();
@@ -273,6 +313,7 @@ class ChatDetailController extends ChangeNotifier {
         _mergeMessage(m);
       }
       _messages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _observeDeletionState(response, deleteEpoch, first: true);
       _after = response.after;
       _hasNext = response.hasNext;
       _errorMessage = null;
@@ -319,6 +360,7 @@ class ChatDetailController extends ChangeNotifier {
       return;
     }
     final generation = _generation, cursor = _after;
+    final deleteEpoch = _deleteEpoch;
     _isLoadingEarlier = true;
     _notify();
     try {
@@ -328,8 +370,10 @@ class ChatDetailController extends ChangeNotifier {
         limit: 20,
       );
       if (!_active || generation != _generation) return;
-      final ids = _messages.map((e) => e.messageId).toSet();
-      _messages.addAll(page.messages.where((e) => ids.add(e.messageId)));
+      for (final message in page.messages) {
+        _mergeMessage(message);
+      }
+      _observeDeletionState(page, deleteEpoch);
       _boundMessages();
       _hasNext = page.hasNext && page.after != cursor && _messages.length < 200;
       _after = page.after;
@@ -381,11 +425,15 @@ class ChatDetailController extends ChangeNotifier {
     final snapshot = {
       'text': _draftText,
       'outbox': _outbox.map((m) => m.toJson()).toList(),
+      'pending_deletes': _pendingDeletes.map(
+        (id, scope) => MapEntry(id, scope.wire),
+      ),
     };
     final write = _draftWrites.then((_) async {
       if (!_isCurrent()) return;
       if ((snapshot['text'] as String).isEmpty &&
-          (snapshot['outbox'] as List).isEmpty) {
+          (snapshot['outbox'] as List).isEmpty &&
+          (snapshot['pending_deletes'] as Map).isEmpty) {
         await draftStore.remove(userId: userId, name: _draftKey);
       } else {
         await draftStore.save(userId: userId, name: _draftKey, data: snapshot);
@@ -569,46 +617,115 @@ class ChatDetailController extends ChangeNotifier {
     await _sendExisting(message); // Same local ID and uploaded URL, one bubble.
   }
 
-  Future<void> discardUnconfirmed(String clientId) async {
-    if (!_active || _sending.contains(clientId)) return;
-    _acks.remove(clientId)?.cancel();
-    _messages.removeWhere(
-      (m) =>
-          m.clientMsgId == clientId &&
-          m.messageId.isEmpty &&
-          m.status == MessageStatus.unconfirmed,
-    );
-    await _persist();
-    _notify();
+  void _recordRemoved(String id) {
+    _removed.add(id);
+    ChatChanges.removed(userId, id);
+    while (_removed.length > 200) {
+      _removed.remove(_removed.first);
+    }
   }
 
-  /// Explicit user reconciliation, never infer an acknowledgement by matching
-  /// text/time. The selected server message must already be in this history.
-  Future<bool> reconcileUnconfirmed(
-    String clientId,
-    String serverMessageId,
+  void _observeDeletionState(
+    ChatMessagesResponse page,
+    int epoch, {
+    bool first = false,
+  }) {
+    // A GET started before/during DELETE cannot verify that mutation.
+    if (epoch != _deleteEpoch || isDeleting) {
+      _historyEpoch = null;
+      return;
+    }
+    if (first) {
+      _historyEpoch = epoch;
+      _freshHistoryIds.clear();
+    }
+    final visible = page.messages
+        .where((m) => !m.revoked)
+        .map((m) => m.messageId)
+        .toSet();
+    if (_historyEpoch == epoch) _freshHistoryIds.addAll(visible);
+    for (final id in _pendingDeletes.keys.toList()) {
+      if (visible.contains(id)) {
+        _pendingDeletes.remove(id);
+      } else if (!page.hasNext &&
+          _historyEpoch == epoch &&
+          !_freshHistoryIds.contains(id)) {
+        _recordRemoved(id);
+        _pendingDeletes.remove(id);
+        _messages.removeWhere((m) => m.messageId == id);
+      }
+    }
+  }
+
+  Future<bool> deleteMessage(
+    ChatMessage message,
+    MessageDeleteScope scope,
   ) async {
-    if (!_active || _accessDenied || _sending.contains(clientId)) return false;
-    final pending = _messages.any(
-      (m) =>
-          m.clientMsgId == clientId &&
-          m.messageId.isEmpty &&
-          m.status == MessageStatus.unconfirmed,
-    );
-    final confirmed = _messages.any(
-      (m) =>
-          m.messageId.isNotEmpty &&
-          m.messageId == serverMessageId &&
-          m.senderId == userId,
-    );
-    if (!pending || !confirmed) return false;
-    _acks.remove(clientId)?.cancel();
-    _messages.removeWhere(
-      (m) => m.messageId.isEmpty && m.clientMsgId == clientId,
-    );
-    await _persist();
+    if (!_active || _accessDenied || isDeleting) return false;
+    final id = message.messageId;
+    final known = _messages
+        .where((m) => m.messageId == id && id.isNotEmpty)
+        .firstOrNull;
+    if (known == null ||
+        (int.tryParse(id) ?? 0) <= 0 ||
+        (scope == MessageDeleteScope.everyone && !known.isMine(userId))) {
+      _errorMessage = 'Bạn không có quyền thực hiện thao tác này với tin nhắn.';
+      _notify();
+      return false;
+    }
+    if (_pendingDeletes.containsKey(id)) {
+      _errorMessage =
+          'Chưa xác nhận kết quả trước đó. Hãy tải lại lịch sử để kiểm tra.';
+      _notify();
+      return false;
+    }
+    if (_pendingDeletes.length >= 10) {
+      _errorMessage = 'Hãy tải lại lịch sử trước khi tiếp tục xóa tin nhắn.';
+      _notify();
+      return false;
+    }
+    _deleting.add(id);
+    ++_deleteEpoch;
+    _historyEpoch = null;
+    _pendingDeletes[id] = scope;
+    _errorMessage = null;
     _notify();
-    return true;
+    try {
+      if (!await _persist()) {
+        _pendingDeletes.remove(id);
+        return false;
+      }
+      if (!_active) return false;
+      await repository.deleteMessage(id, scope);
+      if (!_active) return false;
+      _pendingDeletes.remove(id);
+      _recordRemoved(id);
+      _messages.removeWhere((m) => m.messageId == id);
+      return true;
+    } on AppFailure catch (error) {
+      if (!_active) return false;
+      final definitive = const [
+        FailureKind.rejected,
+        FailureKind.forbidden,
+        FailureKind.notFound,
+        FailureKind.unauthorized,
+      ].contains(error.kind);
+      if (definitive) _pendingDeletes.remove(id);
+      _errorMessage = definitive ? error.message : 'Chưa xác nhận được kết quả xóa tin nhắn. Hãy tải lại lịch sử để kiểm tra.';
+      return false;
+    } catch (_) {
+      if (_active) {
+        _errorMessage = 'Chưa xác nhận được kết quả xóa tin nhắn. Hãy tải lại lịch sử để kiểm tra.';
+      }
+      return false;
+    } finally {
+      _deleting.remove(id);
+      ++_deleteEpoch;
+      if (_active) {
+        await _persist();
+        _notify();
+      }
+    }
   }
 
   void _replace(ChatMessage message) {
