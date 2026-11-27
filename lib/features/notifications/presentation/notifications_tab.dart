@@ -32,10 +32,12 @@ class _NotificationsTabState extends State<NotificationsTab> {
       final repository = NotificationRepository(
         api: deps.api,
         cache: deps.cache,
+        privateStore: deps.drafts,
       );
       _controller = NotificationController(
         repository: repository,
         userId: userId,
+        isCurrent: () => mounted && deps.session.tokens?.userId == userId,
       )..initialize();
 
       _scrollController.addListener(_onScroll);
@@ -138,6 +140,19 @@ class _NotificationsTabState extends State<NotificationsTab> {
                 ),
               ),
               const Divider(height: 1),
+              if (controller.errorMessage != null &&
+                  controller.items.isNotEmpty)
+                MaterialBanner(
+                  content: Text(controller.errorMessage!),
+                  actions: [
+                    TextButton(
+                      onPressed: controller.isLoading
+                          ? null
+                          : controller.refresh,
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                ),
 
               // Danh sách thông báo
               Expanded(child: _buildBody(context, controller)),
@@ -177,10 +192,30 @@ class _NotificationsTabState extends State<NotificationsTab> {
           'Chưa có thông báo liên quan đến ngân hàng câu hỏi.',
         NotificationFilter.all => 'Bạn sẽ nhận được thông báo khi có bạn bè tương tác hoặc kết quả duyệt câu hỏi.',
       };
-      return AppEmptyState(
-        icon: Icons.notifications_none_outlined,
-        title: 'Chưa có thông báo',
-        message: emptyMsg,
+      return RefreshIndicator(
+        onRefresh: controller.refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: 300,
+              child: AppEmptyState(
+                icon: Icons.notifications_none_outlined,
+                title: 'Chưa có thông báo',
+                message: emptyMsg,
+              ),
+            ),
+            if (controller.hasNext)
+              TextButton(
+                onPressed: controller.isLoadingMore
+                    ? null
+                    : controller.loadMore,
+                child: Text(
+                  controller.isLoadingMore ? 'Đang tải…' : 'Tải thêm thông báo',
+                ),
+              ),
+          ],
+        ),
       );
     }
 
@@ -193,13 +228,18 @@ class _NotificationsTabState extends State<NotificationsTab> {
         separatorBuilder: (_, _) => const Divider(height: 1, thickness: 0.5),
         itemBuilder: (context, index) {
           if (index == displayItems.length) {
-            return const Padding(
+            return Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                child: TextButton(
+                  onPressed: controller.isLoadingMore
+                      ? null
+                      : controller.loadMore,
+                  child: Text(
+                    controller.isLoadingMore
+                        ? 'Đang tải…'
+                        : 'Tải thêm thông báo',
+                  ),
                 ),
               ),
             );

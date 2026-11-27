@@ -1,3 +1,5 @@
+import '../../../core/errors/app_failure.dart';
+
 class ConversationItem {
   const ConversationItem({
     required this.conversationId,
@@ -89,7 +91,7 @@ class ConversationItem {
           : 'Cuộc trò chuyện',
       displayAvatarUrl: resolvedAvatar,
       lastMessageContent: lastMsg?['content'] as String?,
-      lastMessageId: lastMsg?['id']?.toString(),
+      lastMessageId: (lastMsg?['message_id'] ?? lastMsg?['id'])?.toString(),
       unreadCount: unread,
       updatedAt: parseDate(json['updated_at'] ?? lastMsg?['created_at']),
       partnerId: resolvedPartnerId,
@@ -102,7 +104,7 @@ class ConversationItem {
     'display_name': displayName,
     'display_avatar_url': displayAvatarUrl,
     'last_message': {
-      if (lastMessageId != null) 'id': lastMessageId,
+      if (lastMessageId != null) 'message_id': lastMessageId,
       if (lastMessageContent != null) 'content': lastMessageContent,
     },
     'unread_count': unreadCount,
@@ -115,16 +117,18 @@ class ConversationListResponse {
   const ConversationListResponse({
     required this.items,
     this.after,
+    this.nextCursor,
     this.hasNext = false,
   });
 
   final List<ConversationItem> items;
   final String? after;
+  final String? nextCursor;
   final bool hasNext;
 
   factory ConversationListResponse.fromJson(Object? raw) {
-    if (raw is! Map<String, dynamic>) {
-      return const ConversationListResponse(items: []);
+    if (raw is! Map<String, dynamic> || raw['items'] is! List) {
+      throw AppFailure.invalidData;
     }
 
     final rawItems = raw['items'];
@@ -142,6 +146,7 @@ class ConversationListResponse {
     return ConversationListResponse(
       items: list,
       after: pagination?['after']?.toString(),
+      nextCursor: raw['next_cursor'] as String?,
       hasNext: pagination?['has_next'] as bool? ?? false,
     );
   }
@@ -149,6 +154,7 @@ class ConversationListResponse {
   Map<String, dynamic> toJson() => {
     'items': items.map((e) => e.toJson()).toList(),
     'pagination': {'after': after, 'has_next': hasNext},
+    if (nextCursor != null) 'next_cursor': nextCursor,
   };
 }
 

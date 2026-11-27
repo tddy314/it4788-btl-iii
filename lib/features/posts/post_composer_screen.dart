@@ -109,14 +109,7 @@ class _PostComposerScreenState extends State<PostComposerScreen>
       if (kind == 'images') {
         files = await _picker.pickMultiImage();
       } else {
-        final file = kind == 'camera'
-            ? await _picker.pickImage(source: ImageSource.camera)
-            : await _picker.pickVideo(
-                source: kind == 'record'
-                    ? ImageSource.camera
-                    : ImageSource.gallery,
-                maxDuration: const Duration(seconds: 10),
-              );
+        final file = await _picker.pickImage(source: ImageSource.camera);
         files = file == null ? [] : [file];
       }
       if (mounted) await _controller!.addFiles(files);
@@ -222,7 +215,7 @@ class _PostComposerScreenState extends State<PostComposerScreen>
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.public),
                 title: Text('Công khai'),
-                subtitle: Text('Tối đa 500 từ · 4 ảnh hoặc 1 video'),
+                subtitle: Text('Tối đa 500 từ · 4 ảnh tĩnh'),
               ),
               TextField(
                 controller: _text,
@@ -297,20 +290,10 @@ class _PostComposerScreenState extends State<PostComposerScreen>
                     icon: const Icon(Icons.photo_camera_outlined),
                     label: const Text('Chụp ảnh'),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: locked ? null : () => _pick('video'),
-                    icon: const Icon(Icons.video_library_outlined),
-                    label: const Text('Chọn video'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: locked ? null : () => _pick('record'),
-                    icon: const Icon(Icons.videocam_outlined),
-                    label: const Text('Quay video'),
-                  ),
                 ],
               ),
               const Text(
-                'Ảnh tĩnh tối đa 4 MB/tệp. Video tối đa 10 MB, dài 1–10 giây.',
+                'Tối đa 4 ảnh tĩnh, mỗi ảnh tối đa 4 MB. Bạn vẫn có thể xem video bài giảng trên bảng tin.',
               ),
               if (c.message != null)
                 Padding(

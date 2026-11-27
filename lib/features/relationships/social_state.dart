@@ -17,6 +17,7 @@ class SocialChanges extends ChangeNotifier {
   bool lastMutationConfirmed = false;
   bool _disposed = false;
   String? lastBlockedUserId;
+  String? lastUnblockedUserId;
   String? get userId => _userId;
 
   void _sessionChanged() {
@@ -36,8 +37,9 @@ class SocialChanges extends ChangeNotifier {
     return SocialLease(this, id, _epoch);
   }
 
-  void invalidate({String? blockedUserId}) {
+  void invalidate({String? blockedUserId, String? unblockedUserId}) {
     lastBlockedUserId = blockedUserId;
+    lastUnblockedUserId = unblockedUserId;
     revision++;
     if (!_disposed) notifyListeners();
   }
@@ -45,6 +47,7 @@ class SocialChanges extends ChangeNotifier {
   Future<bool> mutate(
     Future<void> Function() operation, {
     String? blockedUserId,
+    String? unblockedUserId,
   }) async {
     if (busy) return false;
     final guard = lease();
@@ -60,7 +63,10 @@ class SocialChanges extends ChangeNotifier {
       if (guard.active) {
         busy = false;
         // Also reconcile failed/ambiguous writes. Never replay the write.
-        invalidate(blockedUserId: blockedUserId);
+        invalidate(
+          blockedUserId: blockedUserId,
+          unblockedUserId: unblockedUserId,
+        );
       }
     }
   }

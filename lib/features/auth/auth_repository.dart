@@ -4,6 +4,7 @@ import '../../core/errors/app_failure.dart';
 import '../../core/network/api_client.dart';
 import '../../core/storage/session_store.dart';
 import 'device_identity.dart';
+import 'auth_validation.dart';
 
 class AuthRepository {
   AuthRepository({required this.api, required this.device});
@@ -18,7 +19,7 @@ class AuthRepository {
     final deviceId = await device.getId();
     try {
       return await api.request(
-        'auth/login',
+        'auth/native/login',
         method: 'POST',
         authenticated: false,
         cancelToken: cancelToken,
@@ -30,11 +31,12 @@ class AuthRepository {
         },
         decode: (value) {
           final json = value as Map<String, dynamic>;
+          _validateAccount(json);
           final id = json['user_id'];
           if ((id is! int && id is! String) || id.toString().isEmpty) {
             throw const FormatException('Invalid user ID');
           }
-          return _tokens(json, id.toString());
+          return _tokens(json, id.toString(), nativeAuth: true);
         },
       );
     } on AppFailure catch (error) {
@@ -43,21 +45,34 @@ class AuthRepository {
   }
 
   Future<SessionTokens> refresh(SessionTokens current) => api.request(
-    'auth/refresh',
+    current.nativeAuth ? 'auth/native/refresh' : 'auth/refresh',
     method: 'POST',
     authenticated: false,
     data: {'refresh_token': current.refreshToken},
-    decode: (value) => _tokens(value as Map<String, dynamic>, current.userId),
+    decode: (value) => _tokens(
+      value as Map<String, dynamic>,
+      current.userId,
+      nativeAuth: current.nativeAuth,
+    ),
   );
 
-  Future<void> logout() =>
-      api.request<void>('auth/logout', method: 'POST', decode: (_) {});
+  Future<void> logout() => api.request<void>(
+    api.session.tokens?.nativeAuth == true
+        ? 'auth/native/logout'
+        : 'auth/logout',
+    method: 'POST',
+    decode: (_) {},
+  );
 
   Future<void> changePassword(
     String oldPassword,
     String newPassword, {
     CancelToken? cancelToken,
   }) async {
+    final error =
+        AuthValidation.password(oldPassword) ??
+        AuthValidation.newPassword(newPassword, oldPassword);
+    if (error != null) throw AppFailure(FailureKind.rejected, error);
     try {
       await api.request<void>(
         'auth/change-password',
@@ -71,7 +86,35 @@ class AuthRepository {
     }
   }
 
-  static SessionTokens _tokens(Map<String, dynamic> json, String userId) {
+  static void _validateAccount(Map<String, dynamic> json) {
+    final state = json['account_state'];
+    if (state == 'EMAIL_VERIFICATION_REQUIRED') {
+      throw const AppFailure(
+        FailureKind.rejected,
+        'Tài khoản chưa được xác minh. Vui lòng liên hệ giảng viên để hoàn tất thiết lập.',
+      );
+    }
+    if (state == 'PASSWORD_CHANGE_REQUIRED') {
+      throw const AppFailure(
+        FailureKind.rejected,
+        'Tài khoản cần đổi mật khẩu ban đầu. Vui lòng liên hệ giảng viên để hoàn tất thiết lập trước khi đăng nhập.',
+      );
+    }
+    final type = json['token_type'];
+    if ((state != null && state != 'ACTIVE') ||
+        (type != null && type != 'ACCESS')) {
+      throw const AppFailure(
+        FailureKind.rejected,
+        'Tài khoản chưa có phiên truy cập đầy đủ. Vui lòng liên hệ giảng viên.',
+      );
+    }
+  }
+
+  static SessionTokens _tokens(
+    Map<String, dynamic> json,
+    String userId, {
+    required bool nativeAuth,
+  }) {
     final access = json['access_token'];
     final refresh = json['refresh_token'];
     if (access is! String ||
@@ -84,6 +127,7 @@ class AuthRepository {
       userId: userId,
       accessToken: access,
       refreshToken: refresh,
+      nativeAuth: nativeAuth,
     );
   }
 

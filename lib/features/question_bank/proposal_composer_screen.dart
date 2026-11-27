@@ -9,6 +9,7 @@ import '../../core/widgets/app_states.dart';
 import 'proposal_composer_controller.dart';
 import 'proposal_draft.dart';
 import 'question_bank_repository.dart';
+import 'question_bank_cache.dart';
 import 'question_bank_routes.dart';
 import 'question_bank_widgets.dart';
 import 'question_image_service.dart';
@@ -41,7 +42,10 @@ class _ProposalComposerScreenState extends State<ProposalComposerScreen> {
     _controller = ProposalComposerController(
       repository: QuestionBankRepository(dependencies.api),
       drafts: dependencies.drafts,
-      cache: dependencies.cache,
+      cache: QuestionBankCache(
+        drafts: dependencies.drafts,
+        legacy: dependencies.cache,
+      ),
       images:
           widget.images ?? DeviceQuestionImageService(dependencies.mediaUpload),
       userId: dependencies.session.tokens?.userId ?? '',

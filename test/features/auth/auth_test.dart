@@ -213,26 +213,40 @@ void main() {
         type: DioExceptionType.receiveTimeout,
       );
       await expectLater(
-        repository.changePassword(' old ', ' new '),
+        repository.changePassword(' old ', 'NewPass123'),
         throwsA(
           isA<AppFailure>().having((e) => e.kind, 'kind', FailureKind.timeout),
         ),
       );
       expect(adapter.requests.last.data, {
         'old_password': ' old ',
-        'new_password': ' new ',
+        'new_password': 'NewPass123',
       });
       expect(adapter.requests.length, 2);
     },
   );
 
   test(
-    'Password validation does not impose an invented special-character rule',
+    'Issued passwords are preserved while new passwords follow PDF p.23',
     () {
       expect(AuthValidation.password('Pass@123'), isNull);
       expect(AuthValidation.newPassword('same', 'same'), isNotNull);
+      expect(AuthValidation.newPassword('Pass@123', 'old'), isNotNull);
+      expect(AuthValidation.newPassword(' New123 ', 'old'), isNotNull);
+      expect(AuthValidation.newPassword('NewPass123', 'old'), isNull);
     },
   );
+
+  test('An invalid new password is rejected before checking network or sending a request', () async {
+    connection.change(ConnectionStatus.offline);
+    await expectLater(
+      repository.changePassword('old', 'New@123'),
+      throwsA(
+        isA<AppFailure>().having((e) => e.kind, 'kind', FailureKind.rejected),
+      ),
+    );
+    expect(adapter.requests, isEmpty);
+  });
 
   testWidgets(
     'Login errors preserve fields; no overflow on small screen and large font',

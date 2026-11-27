@@ -19,6 +19,9 @@ import 'package:it4788_btl/features/posts/post_routes.dart';
 import 'package:it4788_btl/features/question_bank/question_bank_tab.dart';
 
 import '../../support/fakes.dart';
+
+import 'package:it4788_btl/features/relationships/social_scope.dart';
+
 import '../auth/auth_test.dart' show AuthAdapter, response;
 import 'posts_test.dart' show postJson, pageJson, testSession;
 
@@ -128,6 +131,57 @@ void main() {
       expect(find.text('Thử lại'), findsOneWidget);
       expect(adapter.requests.last.path, endsWith('posts/10'));
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'Confirmed block hides author and purges feed cache; unblock reloads without stale exclusions',
+    (tester) async {
+      var blocked = false;
+      adapter.respond = (options) async => response(
+        200,
+        options.path.endsWith('posts/10')
+            ? {
+                ...postJson(),
+                'author': {'user_id': 8, 'full_name': 'Bạn học'},
+              }
+            : pageJson(
+                blocked
+                    ? []
+                    : [
+                        {
+                          'feed_id': 1,
+                          'target_type': 'POST',
+                          'target_id': 10,
+                          'action_type': 'CREATED_POST',
+                          'actor': {'user_id': 8, 'full_name': 'Bạn học'},
+                        },
+                      ],
+              ),
+      );
+      await mount(tester);
+      expect(find.text('Xin chào 👋'), findsOneWidget);
+      final social = SocialScope.maybeOf(
+        tester.element(find.byType(FeedScreen)),
+      )!;
+      await social.mutate(() async {
+        blocked = true;
+      }, blockedUserId: '8');
+      await tester.pumpAndSettle();
+      expect(find.text('Xin chào 👋'), findsNothing);
+      expect(
+        (await dependencies.cache.read(
+          userId: '7',
+          resource: 'feed/home-v1',
+        ))!.data,
+        isEmpty,
+      );
+      await social.mutate(() async {
+        blocked = false;
+      }, unblockedUserId: '8');
+      await tester.pumpAndSettle();
+      expect(find.text('Xin chào 👋'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

@@ -9,11 +9,14 @@
 - **Nền tảng & Ngôn ngữ:** Flutter, chỉ triển khai Android mobile, toàn bộ giao diện và thông báo người dùng bằng **tiếng Việt**.
 - **Phạm vi kỹ thuật:** Nhóm chỉ làm **Frontend** và tích hợp vào hệ thống Backend có sẵn do thầy giáo cung cấp; không triển khai backend, database, thuật toán AI hay trang admin.
 - **Tài khoản:** **Thầy cấp tài khoản: không làm đăng ký hoặc OTP kích hoạt từ đăng ký.** Đổi mật khẩu sau đăng nhập là chức năng riêng.
+- **Quên mật khẩu:** PDF mới trang 76 ghi chú “ĐỂ ĐƠN GIẢN THÌ THẦY SẼ RESET QUA ĐƠN CỦA SV”. Sinh viên liên hệ/gửi đơn cho thầy; app không triển khai tự reset/quên mật khẩu, OTP khôi phục, form gửi đơn hoặc gọi API reset dành cho admin. Không nhầm với chức năng đổi mật khẩu sau đăng nhập đang có.
+- **Đọc cả ghi chú trên slide:** Khi đối chiếu PDF, phải đọc chú thích, chữ đỏ/khung khoanh, dấu sao và phần bổ sung đè lên bảng API; không chỉ đọc tên endpoint hoặc bảng tham số. Các ghi chú thầy xử lý thay/đơn giản hóa giới hạn phạm vi app dù bảng bên dưới hoặc Swagger vẫn có API. Trang 70–72 ghi thầy tạo tài khoản, trang 76 ghi thầy reset theo đơn. Nếu chữ trên ảnh không trích xuất được hoặc phạm vi chú thích không rõ, kiểm tra trực quan trang PDF và ghi nhận điểm cần xác minh, không tự mở thêm feature.
 - **Quyền truy cập:** **Phải đăng nhập trước khi vào bảng tin, xem bài và tương tác. Không có chế độ khách (Guest mode).** Mọi API đọc/ghi đều yêu cầu Bearer token.
 - **Quản lý phiên:** Khi còn phiên đăng nhập, mất mạng không đồng nghĩa với đăng xuất; có thể xem nội dung đã lưu trên máy.
 - **Luồng chính:** Đăng nhập → Chọn môn đang học → Soạn/nộp bộ câu hỏi → Theo dõi đề xuất; bổ sung các tính năng xã hội theo công việc được phân công.
 - **Giới hạn nghiệp vụ:** Chỉ triển khai tính năng được giao. Không tự mở rộng sang minigame, AI, chat nhóm, duyệt câu hỏi hay sinh đề cho giảng viên.
-- **Phạm vi hồ sơ và bạn bè:** Chỉ giữ tìm người trong tab Bạn bè (`GET search?type=USER`) để mở hồ sơ/gửi lời mời; không triển khai module tìm kiếm toàn cục, tìm bài viết, lịch sử hay từ khóa thịnh hành.
+- **Không biến xử lý lỗi thành tính năng ngoài PDF:** Không thêm màn/công cụ yêu cầu người dùng đối chiếu ID tin nhắn, ghép bản cục bộ với bản server hoặc quản lý outbox kỹ thuật. Ngày 22/11 đã gỡ luồng đối chiếu thủ công do AI tự thêm. Giữ trạng thái lỗi và tải lại lịch sử phù hợp; không báo thành công giả, tự ghép bằng nội dung hoặc replay tin chưa rõ kết quả. Các ghi chép cũ nói đã có đối chiếu thủ công là lịch sử, không phải yêu cầu cần khôi phục.
+- **Tìm kiếm (cập nhật theo yêu cầu đối chiếu PDF ngày 18/11/2026):** Tìm người trong tab Bạn bè dùng `GET search?type=USER`; trang chủ bổ sung tìm bài viết dùng `GET search?type=POST` theo PDF trang 29. Không tự mở thêm tìm kiếm mọi thực thể, lịch sử hay từ khóa thịnh hành. Tìm toàn văn/đảo thứ tự từ là công việc của API, không giả lập kết quả ở client.
 
 ---
 
@@ -33,6 +36,8 @@
 10. Kiểm thử trên điện thoại thật các bước ngắt mạng trước/trong thao tác và khôi phục mạng. Mock/unit test không thay cho nghiệm thu này.
 
 ### Các tình huống kiểm thử mở rộng cần dự kiến
+
+Danh sách dưới đây là các tình huống nhóm chủ động dự kiến, không phải danh sách thầy đã công bố và không có nghĩa code đã xử lý tất cả. Chọn trường hợp liên quan đến feature, ghi rõ đã chạy hay chưa; không tự mở rộng chức năng để đáp ứng tình huống chưa áp dụng.
 
 | Nhóm | Thao tác/tình huống có thể được kiểm tra | Hành vi cần hướng tới |
 | --- | --- | --- |
@@ -78,7 +83,31 @@
 
 ---
 
-## 3. Hiện trạng codebase — Cập nhật 14/11/2026
+## 3. Hiện trạng codebase — Cập nhật 23/11/2026
+
+**Số đếm phản hồi 23–24/11:** `CommentsScreen` lấy số phản hồi chưa xóa từ thread khi đã tải đủ; không lấy số mục trang đầu làm tổng khi còn phân trang hoặc chạm giới hạn 200 mục. Thêm/xóa được server xác nhận cập nhật số đếm của đúng bình luận cha, giữ phản hồi đã xác nhận khi refresh lỗi; không giảm số đếm trước xác nhận xóa. Bộ widget test bình luận/bài viết có 23 test đạt, gồm xóa phản hồi cuối 1 → 0, xóa khi còn phân trang, bỏ placeholder đã xóa khỏi tổng và thêm phản hồi khi snapshot cha cũ. **Toàn bộ 229 test đạt, analyze sạch** (`.dart_tool/reply-count-full-tests.log`, `.dart_tool/reply-count-analyze.log`); kết quả 226 test bên dưới là lượt trước bản sửa số đếm. Build debug x86_64 thành công (`.dart_tool/reply-count-build.log`), đã cài đè -r và mở app trên emulator-5554; xác nhận `lastUpdateTime=2026-11-24 00:02:39`. Chưa thử thao tác thêm/xóa trên dữ liệu server thật trong lượt này; không suy nghiệm thu nghiệp vụ từ test giả hoặc việc cài APK.
+
+**Like/bình luận 23/11:** theo yêu cầu người dùng, `PostCard` hiển thị Like/Unlike và số đếm ngay khi bấm, giữ biểu tượng thay spinner, chặn bấm lặp; trạng thái tạm chỉ ở widget, không gọi `onChanged`/ghi cache trước xác nhận. Giữ GET kiểm tra trước POST vì `/react` là toggle; timeout thao tác ghi chỉ cho GET kiểm tra, không replay. Offline đã biết không đổi trạng thái; server từ chối thì hoàn tác, response cũ không tác động thẻ bài khác/tài khoản khác. `CommentsScreen` hiện bản tạm với “Đang gửi… / Gửi thất bại / Chưa xác nhận được”, lưu nháp bảo mật đến khi POST thành công; thay bằng bản có ID server, khử trùng ID và giữ bình luận đã xác nhận nếu refresh lỗi mạng. Không tự ghép bản chưa xác nhận theo text/thời gian hoặc tự gửi lại. Swagger kiểm tra lại 23/11 trong `.dart_tool/optimistic-23-openapi.json`. APK 22/11 bên dưới chưa chứa thay đổi này; cần hot reload/chạy hoặc build lại để thử.
+
+**Cửa sổ bình luận 23/11:** `comments_sheet.dart` mở bottom sheet không modal qua Scaffold, kéo từ 28% đến 88%, ban đầu 62%; phần bài còn lộ vẫn cuộn được. Bảng tin và chi tiết bài đều dùng cửa sổ này qua `PostCard`, không push màn bình luận riêng. Phản hồi tải ngay dưới bình luận cha trong cùng danh sách cuộn; ô nhập chỉ rõ người đang được trả lời. Giữ nguyên `parent_comment_id`, chuyển mục tiêu sau khi lưu nháp, capture tên record trước khi đưa vào hàng đợi ghi để không lưu nhầm nháp gốc/phản hồi. Kiểm tra timeout theo đúng thread, không tự gửi lại. Đóng bằng nút, kéo hoặc Back; giữ nháp và cập nhật số đếm từ server khi đóng.
+
+**Kiểm chứng 23/11 mới nhất:** **226 test đạt, analyze sạch**, log `.dart_tool/comments-sheet-23-final-tests.log` và `.dart_tool/comments-sheet-23-final-analyze.log`. Có 13 widget test bổ sung trong các lượt Like/bình luận và popup: bấm lặp/hoàn tác/timeout/offline, bản tạm/ID thật/nháp, cuộn bài phía sau, không push route, gửi đúng thread, màn nhỏ/chữ lớn/bàn phím và đóng/Back. Kết quả 222 test trong `optimistic-23-final-*` là lượt trước popup. APK debug x86_64 đã build và cài đè thành công lên emulator-5554 (Medium_Phone_API_37.0) ngày 23/11; đã mở bảng tin và cửa sổ bình luận, tải được bình luận thật. Cài bằng -r giữ dữ liệu; đã cold boot không wipe để xử lý phiên cài Android bị kẹt. Không gửi bình luận/Like hay thao tác ghi nghiệp vụ trong lượt cài. Chưa build lại release ARM64 hoặc nghiệm thu trọn luồng trên điện thoại/server thật.
+
+**Hoàn thiện 22/11:** đã bổ sung xóa/thu hồi tin qua `DELETE /messages/{id}` đúng scope ME/EVERYONE và quyền người gửi; UI nhấn giữ có xác nhận, chỉ cập nhật sau server. Có marker bảo mật chống replay sau lỗi mạng, loại GET cũ, xử lý revoked và đồng bộ preview hội thoại/cache theo user. `ChatChanges` là sự kiện nội bộ feature chat, không phải tính năng người dùng. Đã gỡ công cụ đối chiếu ID ngoài PDF. **213 test đạt, analyze sạch**; xem mục hoàn thiện 22/11 trong [báo cáo](docs/thay-doi-pdf-2026-11-19.md). Các ghi chép bên dưới về thiếu xóa/thu hồi là lịch sử đã được sửa. Push/QUESTION và nghiệm thu server/hai điện thoại thật vẫn có giới hạn được ghi rõ; không tuyên bố hoàn thành 100% từ test.
+
+**APK bản cuối 22/11:** debug x86_64 và release ARM64 (22,2 MB) build thành công sau các sửa phân trang/preview, log `complete-22-*`. Chưa cài/chạy bản cuối trên máy thật. Khi đánh giá, phân biệt rõ chức năng đã có code, giới hạn hợp đồng/cấu hình và kịch bản chưa nghiệm thu; không biến vấn đề đối soát gửi chat thành tính năng người dùng ngoài PDF.
+
+**Điều chỉnh 22/11:** đã gỡ màn chọn/liên kết ID tin và thao tác bỏ bản cục bộ ngoài PDF. Trạng thái chưa xác nhận chỉ tải lại lịch sử, không tự gửi lại. Analyze sạch, 202 test đạt (`scope-22-*`); đã bỏ kiểm thử riêng của chức năng thừa. Chưa build lại APK sau thay đổi này.
+
+**Rà soát bổ sung 20/11:** cấu trúc Swagger tải lại không đổi so với 19/11. Phát hiện chat **chưa có thao tác xóa/thu hồi** qua `DELETE /messages/{id}` scope ME/EVERYONE (PDF mới trang 185); chỉ nhận MESSAGE_REVOKED chưa đủ thay thế thao tác này. Không tuyên bố mọi chức năng chat đã đủ. Xem mục rà soát 20/11 trong [báo cáo](docs/thay-doi-pdf-2026-11-19.md); lượt này chưa sửa code.
+
+**Kiểm chứng bản cập nhật 19/11:** 203 test đạt, analyze sạch; APK debug x86_64 và release ARM64 (22,2 MB) build thành công. Log `update-19-*` trong `.dart_tool`. Chưa nghiệm thu bản này trên điện thoại thật/server nghiệp vụ; push vẫn chờ cấu hình và chat vẫn cần làm rõ tương quan xác nhận tự động với backend.
+
+**Cập nhật theo PDF/Swagger ngày 19/11/2026:** xem [bản đối chiếu và phần cập nhật code](docs/thay-doi-pdf-2026-11-19.md). PDF hiện hành được lưu tại `docs/Social Network for Student-Generated Question Bank-2026-11-19.pdf` (207 trang); bản 208 trang là lịch sử. Login mới dùng `/auth/native/login`; refresh/logout dùng `/auth/native/*` cho phiên native. `SessionTokens.nativeAuth` được lưu bảo mật cùng token; record cũ thiếu cờ giữ kênh legacy, không gửi RT cũ sang native, không xóa phiên chỉ vì cập nhật app/offline. Phiên cũ chỉ còn chạy khi server hỗ trợ tương thích, đăng nhập lại sẽ nhận phiên native. Token ONBOARDING không mở shell/không được lưu như phiên đầy đủ; hướng dẫn liên hệ giảng viên với tài khoản chưa ACTIVE, không gọi API xác minh admin. Soạn bài cá nhân chỉ chọn/chụp tối đa 4 ảnh tĩnh; bỏ chọn/quay video, giữ xem video giảng viên và giữ draft cũ có video nhưng yêu cầu gỡ trước khi đăng. SESSION notification kiểm tra đề xuất của mình, chỉ thử luyện tập khi server trả 403/404, giữ cache đúng tài khoản khi lỗi mạng. Chat cho đối chiếu thủ công bản chưa xác nhận với ID tin máy chủ do người dùng chọn; không tự ghép theo text/thời gian hoặc tự replay. Kết quả kiểm chứng cuối ghi trong báo cáo; không dùng kết quả 194 test cũ để kết luận bản 19/11 đã nghiệm thu server thật.
+
+**Đối chiếu tiếp ngày 18/11/2026:** xem [ma trận PDF–Swagger–code và kết luận đủ/thiếu](docs/doi-chieu-pdf-swagger-2026-11-18.md). Đã sửa đọc thông báo dùng đúng `read`, `read_at`, `unread_count` server thay vì tự trừ; GET cũ không ghi đè kết quả đọc. Xóa mã tạo nhóm/GIF không sử dụng, kiểm tra ảnh chat động/hỏng và ảnh hồ sơ động; bổ sung tìm bài từ trang chủ và mở ảnh hồ sơ bằng viewer chung; dùng `next_cursor` và `last_message.message_id` đúng schema hội thoại. Bỏ nhãn chat “Trực tuyến” cố định và trường gửi STOMP ngoài schema. Cache thông báo và ngân hàng câu hỏi chuyển sang `DraftStore` bảo mật, có chuyển cache cũ khi đọc và giữ bản offline cũ nếu chuyển lỗi. Mật khẩu mới chỉ chữ/số theo PDF. **194 kiểm thử đạt, analyze sạch.** Đã kiểm tra khởi động một bản debug trên emulator trong đợt; chưa nghiệm thu lại toàn bộ API trên server, hai điện thoại thật, push hay thu/phát âm thanh native. Người dùng xác nhận **chưa có cấu hình Firebase từ thầy**; phần push đang chờ cấu hình, không coi đã hoàn thành nghiệm thu. Xem báo cáo để biết bản APK đã build và giới hạn điều hướng câu hỏi/xác nhận socket. Không suy ra server thật đã được nghiệm thu từ các test hợp đồng.
+
+**Hoàn thiện bổ sung 17/11/2026 trên nền `0b30ad9`:** đã sửa các lỗi trong đợt rà soát: TLS/vòng đời/STOMP chat, gửi/chưa xác nhận/retry/cache riêng tư, thông báo đã đọc, race cài đặt, chặn/bỏ chặn đồng bộ bảng tin và emote giữ nguyên URL. Đối soát bài/bình luận sau timeout dùng cùng nội dung đã chuyển emote với request, tránh kết luận nhầm rồi gửi trùng. Đã bổ sung frontend nhận push bằng FID và thu âm/nghe thử. Analyze sạch, **176 test đạt**; build debug x86_64 và release ARM64 thành công. Đã cài debug lên emulator, kiểm tra đăng nhập rỗng và mở lại offline khi chưa có phiên. Xem [bàn giao bản sửa, cấu hình và giới hạn](docs/hoan-thien-luong-2026-11-17.md). Báo cáo rà soát trước đó là lịch sử phát hiện, không phải trạng thái lỗi chưa sửa hiện tại. Chưa nghiệm thu điện thoại thật, API nghiệp vụ, push server thật hoặc thu/phát âm thanh thực tế trong đợt này.
 
 - **Mục 1 (`features/auth`, `features/settings`):** Đã có màn đăng nhập qua API, lưu phiên, callback refresh, đăng xuất cục bộ/server và đổi mật khẩu. `main.dart` gắn `AuthApplication` vào khung qua builders/routes công khai. Đã sửa mã thành công mặc định trong `AppConfig` thành **`1000`** theo response server thật. `android/gradle.properties` đặt `kotlin.incremental=false` để tránh lỗi cache khi project ở D: và Pub cache ở C:.
 - **Mục 4 (`features/profile`, `features/relationships` — cập nhật 04/11):** Đã nối tab Cá nhân (`ProfileScreen`) và tab Bạn bè (`RelationshipsScreen`, `FriendFinderScreen` tìm người qua `GET search?type=USER`), có danh sách chặn, `SocialChanges`/`SocialLease` vô hiệu dữ liệu khi quan hệ thay đổi, route `ProfileRoutes.user` (`/profile/user`). Xem [bàn giao hồ sơ và quan hệ](docs/module-ho-so-quan-he.md).
@@ -117,6 +146,8 @@
 | `lib/features/auth/` | `AuthApplication`, `AuthController`, `AuthRepository`, `DeviceIdentity`, `LoginScreen` |
 | `lib/features/profile/`, `relationships/` | `ProfileScreen`, `ProfileRoutes.user`, `RelationshipsScreen`, `FriendFinderScreen`, `SocialChanges` |
 | `lib/features/question_bank/` | `QuestionBankTab`, `QuestionBankRoutes` |
+| `lib/features/question_bank/question_bank_cache.dart` | `QuestionBankCache`: adapter interface `JsonCache`, dùng `DraftStore` cho nguồn đề xuất/trạng thái trả lời riêng tư; chuyển cache preferences cũ khi đọc |
+| `lib/features/search/` | `PostSearchRepository`, `PostSearchController`, `PostSearchScreen`: tìm bài từ trang chủ, phân trang offset, bỏ response truy vấn/phiên cũ |
 | `lib/features/settings/` | `SettingsScreen`, `SettingsRoutes`, `ChangePasswordScreen`, `PushSettingsScreen` |
 
 Dependencies đã có trong `pubspec.yaml`: Flutter localizations, `dio`, `flutter_secure_storage`, `shared_preferences`, `connectivity_plus`, `cached_network_image`, `image_picker`, `path_provider`.
@@ -134,13 +165,19 @@ Dependencies đã có trong `pubspec.yaml`: Flutter localizations, `dio`, `flutt
 - **Cache & Bản nháp:**
   - `JsonCache`: Lưu trữ dữ liệu cục bộ theo `userId` (giới hạn 512 KiB/record, tối đa 30–50 bản ghi).
   - `DraftStore`: Lưu văn bản đang gõ dở vào secure storage; tự động phục hồi khi mở lại và xóa sau khi gửi thành công.
+  - Nội dung thông báo/chat và cache ngân hàng câu hỏi riêng tư dùng `DraftStore`; chỉ loại bản preferences cũ sau khi chuyển thành công. Nếu chuyển lỗi, giữ bản offline cũ đúng tài khoản và thử chuyển lại khi đọc sau; không ghi dữ liệu mới trở lại plaintext.
 
 ---
 
 ## 6. Hợp đồng nghiệp vụ & API cần nhớ
 
+- PDF quy định nghiệp vụ; Swagger quy định hợp đồng API hiện tại. Có endpoint không đồng nghĩa phải đưa tính năng vào app. PDF trang 25 cấm lập nhóm chat, trang 27 cấm tham gia/tạo nhóm và không làm việc với ảnh động: giữ chat 1–1, không có lối gửi GIF. Những API có thể hỗ trợ thêm (nhóm, reaction khác Like, ảnh/sửa bình luận, xóa tài khoản) không tự mở rộng giao diện. Nếu hai nguồn mâu thuẫn, ghi khác biệt cụ thể và phần cần xác nhận; không tự bịa hợp đồng.
+- **Bắt buộc đọc kỹ Swagger từng endpoint trước khi code hoặc sửa tích hợp:** method/path, token/quyền, nền tảng, content type, tham số, enum/nullability, phân trang và response thành công/thất bại. Không chỉ sao chép JSON ví dụ hoặc suy đoán theo tên API. [Swagger](https://snsqb.duckdns.org/api/v1/swagger-ui/index.html), [OpenAPI JSON](https://snsqb.duckdns.org/api/v1/docs/openapi.json).
+- Phân biệt ví dụ với schema và response thật. Nếu Swagger khác server, ghi nhận khác biệt không chứa thông tin đăng nhập/token, cập nhật mapping/test phù hợp; không coi mọi HTTP 200 là thành công hoặc báo tích hợp thật chỉ từ test giả. Phần chưa kiểm chứng phải ghi rõ.
 - **Base URL:** `https://snsqb.duckdns.org/api/v1/`
-- **Mã thành công chuẩn:** **`1000`** (Swagger minh họa `0000` không khớp server thật).
+- **Mã thành công chuẩn:** **`1000`**. Swagger mới đã ghi đúng `1000`; các tài liệu/ví dụ cũ dùng `0000` không thay thế hợp đồng hiện tại.
+- **Auth Android:** login mới `/auth/native/login`, refresh `/auth/native/refresh`, logout `/auth/native/logout`. Không trộn token NATIVE với kênh WEB cookie hoặc LEGACY_JSON. Phiên cũ chỉ dùng endpoint cũ đúng kênh cho đến khi đăng nhập lại; khi backend bỏ tương thích và từ chối refresh, yêu cầu đăng nhập lại. Không tự thử nhiều endpoint cho cùng thao tác ghi.
+- Mật khẩu mới do người dùng đặt: chữ cái A–Z/a–z và chữ số, không khoảng trắng/ký tự đặc biệt theo PDF trang 23; kiểm tra trước mạng. Swagger không khai báo pattern, ví dụ có `@` không thay thế nghiệp vụ. Mật khẩu được thầy cấp/mật khẩu hiện tại vẫn gửi nguyên trạng, không trim hoặc sửa khi đăng nhập.
 - **Header bắt buộc:** `Authorization: Bearer <access_token>` (trừ login/refresh).
 - **Kiểu dữ liệu theo OpenAPI thực tế (cập nhật 12/11/2026):**
   - `CursorPaginationDto.after` và `before` là **số nguyên (`int64`)**, luôn đọc qua `?.toString()`.
@@ -148,7 +185,9 @@ Dependencies đã có trong `pubspec.yaml`: Flutter localizations, `dio`, `flutt
   - `NotificationTargetDto` dùng `target_id` (int64) và `type` enum `BADGE | SESSION | POST | QUESTION | USER | CONVERSATION`.
   - `PushSettingsResponseDto` & `UpdatePushSettingsRequestDto` dùng **boolean** (`true`/`false`) cho `push_enabled`, `sound_enabled`, `vibration_enabled`, `categories[K].enabled`; các key category là `SOCIAL`, `ACADEMIC`, `GAMIFICATION`, `SYSTEM`.
   - `SyncFidRequest` (`POST /devices/fid`) gửi `{"fid": "..."}`.
-- **Giới hạn bài viết & bình luận:** Tối đa 500 từ; tối đa 4 ảnh hoặc 1 video (1–10 giây, tối đa 10 MB).
+  - `POST notifications/{id}/read`: response `ReadNotificationResponseDto` dùng `read`, `read_at`, `unread_count`; PDF trang 196 dùng tên cũ `is_read`. Lấy số đếm/thời gian server, không tự trừ 1. `read-all` trả `data: null`. PDF không bắt buộc optimistic read; cập nhật sau xác nhận là lựa chọn xử lý lỗi của app.
+  - Hội thoại có `next_cursor` đầy đủ; gửi nó qua query `cursor` cho trang sau khi có, dùng `after` làm phương án tương thích. `last_message` dùng `message_id`, không phải `id`.
+- **Giới hạn bài viết & bình luận:** Tối đa 500 từ. Theo PDF mới trang 23/27/28, bài cá nhân chỉ chọn/chụp tối đa 4 ảnh tĩnh, 4 MB/ảnh; không quay/chọn video mới. Giữ trình xem video bài giảng do giảng viên đăng. Không suy việc PDF bỏ giới hạn video cũ thành cho phép upload video vô hạn. Draft cũ không bị tự xóa; muốn đăng phải gỡ video mới đang đính kèm. Bài video đã có vẫn có thể hiển thị, và sửa nội dung không tự xóa media cũ.
 - **Đánh giá câu hỏi:** Thang điểm từ **0 đến 4** (0 là giá trị hợp lệ).
 - **Không gọi API admin từ ứng dụng di động.**
 
@@ -171,20 +210,21 @@ Dependencies đã có trong `pubspec.yaml`: Flutter localizations, `dio`, `flutt
 Nhánh **`feat5`** chịu trách nhiệm toàn bộ các tính năng liên quan đến **Thông báo**, **Trò chuyện 1–1 Realtime & Offline**, và **Cài đặt thông báo & Quản trị thiết bị**:
 
 ### A. Hệ thống Thông báo (`lib/features/notifications`)
-- `NotificationsTab` gắn vào `AppTab.notifications` của `AppShell`, hỗ trợ bộ lọc (Tất cả / Chưa đọc / Ngân hàng đề), Pull-to-refresh, Infinite Scroll (`after`, `has_next`), Optimistic read (`POST /notifications/{id}/read`, `POST /notifications/read-all`).
+- `NotificationsTab` gắn vào `AppTab.notifications` của `AppShell`, hỗ trợ bộ lọc (Tất cả / Chưa đọc / Ngân hàng đề), Pull-to-refresh, tải thêm (`after`, `has_next`), đọc từng mục/tất cả qua POST tương ứng. Chỉ cập nhật đã đọc sau xác nhận; dùng số đếm/thời gian server, không replay POST khi timeout. Không bỏ thao tác đọc chỉ vì đang refresh; response GET cũ phải bị loại.
 - `NotificationDeepLinkHandler` điều hướng tới `ChatDetailScreen`, `ProfileRoutes.user`, `QuestionBankRoutes.submission`, `/posts/detail` và bắt lỗi an toàn (không crash khi 404/403 hoặc route chưa merge).
-- Offline cache qua `JsonCache` theo `userId`.
+- Offline cache thông báo qua `DraftStore` bảo mật theo `userId`, tối đa 30 mục/512 KiB; chuyển record `JsonCache` cũ rồi loại bản preferences. Không lưu nội dung thông báo riêng tư vào preferences.
 
 ### B. Trò chuyện 1–1 Realtime & Offline (`lib/features/chat`)
 - Chỉ làm **chat 1–1 (Direct chat)**, không làm chat nhóm; không hỗ trợ tag `@username`.
 - `ConversationsScreen` (`/conversations`): `GET /conversations`, tạo chat 1–1 `POST /conversations/direct`, tìm kiếm nhanh, cache offline.
 - `ChatDetailScreen` (`/chat`): `GET /conversations/{id}/messages`, Reverse scroll, bong bóng chat, trạng thái Đang gửi / Đã gửi / Lỗi thử lại, xem ảnh toàn màn hình phóng to (`InteractiveViewer`), cảnh báo khi bị chặn, upload ảnh qua `deps.mediaUpload` (`MediaPurpose.chat`, $\le 4\text{MB}$).
-- STOMP WebSocket WSS (`wss://snsqb.duckdns.org/api/v1/ws`): subscribe `/user/queue/messages`, `/topic/conv.{id}.typing`; send `/app/chat.send`, `/app/chat.read`, `/app/chat.typing`.
+- STOMP WebSocket WSS (`wss://snsqb.duckdns.org/api/v1/ws`): subscribe `/user/queue/messages` và phân loại sự kiện; send `/app/chat.send`, `/app/chat.read`, `/app/chat.typing` (trường `typing`, ID số). Không dựa vào các topic typing/read ngoài OpenAPI. Reconnect có kiểm soát, không tự replay thao tác gửi.
 - `ChatEmoteConverter`: chuyển đổi ký tự emote (bao gồm `<(")` → 🐧, `(^^^)` → 🦈, `:))` → 😆, `:)` → 😊, `<3` → ❤️, v.v.).
-- Lưu nháp qua `DraftStore`, chống duplicate/replay bằng `client_msg_id`.
+- Lưu text/outbox và cache tin riêng tư qua secure storage (`DraftStore`), có giới hạn tài nguyên và namespace theo user. Không ghi tin riêng tư vào preferences. Mã `client_msg_id` dùng cục bộ, không gửi lên STOMP vì Swagger chưa khai báo; chưa xác nhận backend có echo/chống trùng. Trạng thái `unconfirmed` chỉ cho tải lại/đối chiếu, không gửi lại mù quáng; cần nghiệm thu xác nhận tin bằng hai tài khoản với server thật.
 
 ### C. Cài đặt Thông báo & Thiết bị (`lib/features/settings`)
 - `PushSettingsScreen` (`SettingsRoutes.pushSettings = '/settings/push'`): `GET /settings/push`, `PUT /settings/push`, công tắc chuyên mục (`SOCIAL`, `ACADEMIC`, `SYSTEM`), rung/chuông, tùy chọn kiểu âm thanh mặc định hoặc giọng nói thu âm (Slide 26 & 29), đăng ký/hủy thiết bị (`POST /devices/fid`, `POST /devices/fid/unregister`).
+- Cấu hình Firebase client qua `PushConfig` (template trong docs); không tạo backend mới. SDK Messaging 17.1 dùng `register`/`onRegistered` để lấy FID theo tài liệu hiện tại. Chưa có cấu hình đúng project của server thì không khởi tạo SDK và không tuyên bố push hoạt động. `sound_type` là lựa chọn cục bộ, không nằm trong REST schema. Android compile SDK 37, có quyền micro/thông báo và FileProvider chỉ chia sẻ tệp thu âm của app. Xem bàn giao để phân biệt data-only với notification payload ở nền.
 
 ---
 

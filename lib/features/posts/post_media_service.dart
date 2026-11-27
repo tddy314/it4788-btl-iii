@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../core/errors/app_failure.dart';
 import '../../core/media/media_upload_service.dart';
@@ -113,35 +112,20 @@ class PostMediaService {
     final video =
         bytes.length > 12 &&
         String.fromCharCodes(bytes.sublist(4, 8)) == 'ftyp';
-    final quickTime =
-        video && String.fromCharCodes(bytes.sublist(8, 12)) == 'qt  ';
-    if (!jpeg && !png && !webp && !video) {
+    if (video) {
       throw const AppFailure(
         FailureKind.rejected,
-        'Chọn ảnh JPEG/PNG/WebP tĩnh hoặc video MP4/MOV hợp lệ.',
+        'Bài viết cá nhân chỉ nhận ảnh tĩnh. Không hỗ trợ tải video mới.',
+      );
+    }
+    if (!jpeg && !png && !webp) {
+      throw const AppFailure(
+        FailureKind.rejected,
+        'Chọn ảnh JPEG/PNG/WebP tĩnh hợp lệ.',
       );
     }
     int width, height;
-    Duration? duration;
-    if (video) {
-      final controller = VideoPlayerController.file(File(source.path));
-      try {
-        await controller.initialize().timeout(const Duration(seconds: 15));
-        duration = controller.value.duration;
-        width = controller.value.size.width.round();
-        height = controller.value.size.height.round();
-        if (width <= 0 || height <= 0) {
-          throw const FormatException('Missing video track');
-        }
-      } catch (_) {
-        throw const AppFailure(
-          FailureKind.rejected,
-          'Không đọc được video. Hãy chọn tệp khác.',
-        );
-      } finally {
-        await controller.dispose();
-      }
-    } else {
+    {
       validateSizeDuration(size, video: false);
       final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
       try {
@@ -174,10 +158,7 @@ class PostMediaService {
         buffer.dispose();
       }
     }
-    validateSizeDuration(size, video: video, duration: duration);
-    final ext = video
-        ? (quickTime ? 'mov' : 'mp4')
-        : jpeg
+    final ext = jpeg
         ? 'jpg'
         : png
         ? 'png'
@@ -194,16 +175,11 @@ class PostMediaService {
     }
     return DraftAttachment(
       path: path,
-      type: video ? 'VIDEO' : 'IMAGE',
-      mime: video
-          ? (quickTime ? 'video/quicktime' : 'video/mp4')
-          : jpeg
-          ? 'image/jpeg'
-          : 'image/$ext',
+      type: 'IMAGE',
+      mime: jpeg ? 'image/jpeg' : 'image/$ext',
       size: size,
       width: width,
       height: height,
-      duration: duration?.inSeconds,
     );
   }
 

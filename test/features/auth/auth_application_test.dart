@@ -64,6 +64,19 @@ void main() {
       await tester.ensureVisible(find.byType(FilledButton));
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
+      expect(find.byType(ChangePasswordScreen), findsOneWidget);
+      expect(find.textContaining('ký tự đặc biệt'), findsOneWidget);
+      expect(
+        adapter.requests.where(
+          (r) => r.uri.path.endsWith('auth/change-password'),
+        ),
+        isEmpty,
+      );
+      await tester.enterText(fields.at(1), 'NextPassword123');
+      await tester.enterText(fields.at(2), 'NextPassword123');
+      await tester.ensureVisible(find.byType(FilledButton));
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
       expect(find.byType(ChangePasswordScreen), findsNothing);
       expect(find.text('Đổi mật khẩu thành công.'), findsOneWidget);
       expect(adapter.requests.last.uri.path, '/api/v1/auth/change-password');
@@ -74,7 +87,7 @@ void main() {
       expect(session.hasSession, isFalse);
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.byType(AppShell), findsNothing);
-      expect(adapter.requests.last.uri.path, '/api/v1/auth/logout');
+      expect(adapter.requests.last.uri.path, '/api/v1/auth/native/logout');
       expect(adapter.requests.last.data, isNull);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

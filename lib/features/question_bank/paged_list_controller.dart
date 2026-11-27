@@ -135,6 +135,16 @@ class PagedListController<T> extends ChangeNotifier {
     } on AppFailure catch (error) {
       if (!_current(generation)) return;
       loadMoreFailure = error;
+      if (error.kind == FailureKind.unauthorized ||
+          error.kind == FailureKind.forbidden ||
+          error.kind == FailureKind.notFound) {
+        items = const [];
+        hasNext = false;
+        _cursor = null;
+        isFromCache = false;
+        failure = error;
+        await _removeCache();
+      }
     } catch (_) {
       if (!_current(generation)) return;
       loadMoreFailure = AppFailure.invalidData;

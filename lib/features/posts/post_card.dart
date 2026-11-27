@@ -2,9 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/errors/app_failure.dart';
+import '../../core/network/connection_monitor.dart';
 import '../../core/widgets/app_network_image.dart';
 import 'media_viewer.dart';
-import 'comments_screen.dart';
+import 'comments_sheet.dart';
 import 'post_models.dart';
 import 'posts_repository.dart';
 
@@ -33,26 +34,62 @@ class _PostCardState extends State<PostCard> {
   late Post _post = widget.post;
   late bool _expanded = widget.expanded;
   bool _busy = false, _reconcile = false;
+  bool? _pendingLike;
+  int _likeEpoch = 0;
+  PersistentBottomSheetController? _commentsSheet;
   final _cancel = CancelToken();
   @override
   void didUpdateWidget(PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id) {
+      final sheet = _commentsSheet;
+      _commentsSheet = null;
+      if (sheet != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => sheet.close());
+      }
+      ++_likeEpoch;
+      _busy = false;
+      _reconcile = false;
+      _pendingLike = null;
+    }
     if (!identical(oldWidget.post, widget.post)) _post = widget.post;
   }
 
   @override
   void dispose() {
+    final sheet = _commentsSheet;
+    if (sheet != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => sheet.close());
+    }
     _cancel.cancel();
     super.dispose();
   }
 
   Future<void> _like() async {
     if (_busy) return;
-    setState(() => _busy = true);
+    if (widget.repository.api.connection.status == ConnectionStatus.offline) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(AppFailure.offline.message)));
+      return;
+    }
+    final userId = widget.repository.api.session.tokens?.userId;
+    if (userId == null) return;
+    final epoch = ++_likeEpoch;
+    final postId = _post.id;
+    bool current() =>
+        mounted &&
+        epoch == _likeEpoch &&
+        widget.repository.api.session.tokens?.userId == userId;
+    final desiredLike = !_post.liked;
+    final checking = _reconcile;
+    var writeStarted = false;
+    setState(() {
+      _busy = true;
+      _pendingLike = _reconcile ? null : desiredLike;
+    });
     try {
-      final desiredLike = !_post.liked;
-      final fresh = await widget.repository.get(_post.id, cancel: _cancel);
-      if (!mounted) return;
+      final fresh = await widget.repository.get(postId, cancel: _cancel);
+      if (!current()) return;
       if (_reconcile) {
         setState(() {
           _post = fresh;
@@ -68,14 +105,18 @@ class _PostCardState extends State<PostCard> {
         widget.onChanged(fresh);
         return;
       }
-      final reaction = await widget.repository.like(_post.id, cancel: _cancel);
-      if (!mounted) return;
+      setState(() => _post = fresh);
+      writeStarted = true;
+      final reaction = await widget.repository.like(postId, cancel: _cancel);
+      if (!current()) return;
       setState(() => _post = fresh.withReaction(reaction));
       widget.onChanged(_post);
     } on AppFailure catch (error) {
-      if (!mounted) return;
+      if (!mounted || !current()) return;
       if (accessRevoked(error)) widget.onUnavailable();
-      _reconcile = uncertainWrite(error);
+      // A failed preflight GET has not toggled anything. Only an ambiguous
+      // write needs a subsequent read before allowing another toggle.
+      _reconcile = checking || (writeStarted && uncertainWrite(error));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -86,15 +127,22 @@ class _PostCardState extends State<PostCard> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && epoch == _likeEpoch) {
+        setState(() {
+          _busy = false;
+          _pendingLike = null;
+        });
+      }
     }
   }
 
   Future<void> _comments() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => CommentsScreen(postId: _post.id)),
-    );
-    if (!mounted) return;
+    if (_commentsSheet != null) return;
+    final postId = _post.id;
+    final sheet = _commentsSheet = showPostComments(context, postId: postId);
+    await sheet.closed;
+    if (identical(_commentsSheet, sheet)) _commentsSheet = null;
+    if (!mounted || _post.id != postId) return;
     try {
       final latest = await widget.repository.get(_post.id, cancel: _cancel);
       if (mounted) widget.onChanged(latest);
@@ -106,6 +154,15 @@ class _PostCardState extends State<PostCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final liked = _pendingLike ?? _post.liked;
+    final total =
+        (_post.reactCount +
+                (liked == _post.liked
+                    ? 0
+                    : liked
+                    ? 1
+                    : -1))
+            .clamp(0, _post.reactCount + 1);
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Padding(
@@ -246,7 +303,7 @@ class _PostCardState extends State<PostCard> {
             Wrap(
               spacing: 16,
               children: [
-                Text('${_post.reactCount} lượt thích'),
+                Text('$total lượt thích'),
                 Text('${_post.commentCount} bình luận'),
               ],
             ),
@@ -256,21 +313,17 @@ class _PostCardState extends State<PostCard> {
               children: [
                 TextButton.icon(
                   onPressed: _busy ? null : _like,
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          _post.liked
-                              ? Icons.thumb_up
-                              : Icons.thumb_up_outlined,
-                        ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: liked ? theme.colorScheme.primary : null,
+                    disabledForegroundColor: liked
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  icon: Icon(liked ? Icons.thumb_up : Icons.thumb_up_outlined),
                   label: Text(
                     _reconcile
                         ? 'Kiểm tra lượt thích'
-                        : _post.liked
+                        : liked
                         ? 'Đã thích'
                         : 'Thích',
                   ),

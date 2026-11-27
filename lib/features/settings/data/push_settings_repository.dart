@@ -20,7 +20,7 @@ class PushSettingsRepository {
     return api.request(
       'settings/push',
       method: 'PUT',
-      data: settings.toJson(),
+      data: settings.toServerJson(),
       decode: (data) => PushSettings.fromJson(data as Map<String, dynamic>),
     );
   }

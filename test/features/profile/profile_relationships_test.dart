@@ -17,6 +17,7 @@ import 'package:it4788_btl/features/profile/edit_profile_screen.dart';
 import 'package:it4788_btl/features/profile/profile_controller.dart';
 import 'package:it4788_btl/features/profile/profile_models.dart';
 import 'package:it4788_btl/features/profile/profile_repository.dart';
+import 'package:it4788_btl/features/posts/media_viewer.dart';
 import 'package:it4788_btl/features/profile/profile_screen.dart';
 import 'package:it4788_btl/features/relationships/relationships_screen.dart';
 import 'package:it4788_btl/features/relationships/social_models.dart';
@@ -477,6 +478,40 @@ void main() {
       ),
       home: child,
     ),
+  );
+
+  testWidgets(
+    'Profile avatar and cover reuse the full-screen zoomable media viewer',
+    (tester) async {
+      adapter.respond = (request) async {
+        if (request.path.endsWith('relationship-stats')) {
+          return response(200, statsJson(7));
+        }
+        return response(200, {
+          ...profileJson(),
+          'avatar_url': 'https://example.invalid/avatar.png',
+          'cover_url': 'https://example.invalid/cover.png',
+        });
+      };
+      await tester.pumpWidget(host(ProfileScreen(changes: changes)));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.bySemanticsLabel(RegExp('Xem ảnh đại diện')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(MediaViewer), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      await tester.pageBack();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.bySemanticsLabel(RegExp('Xem ảnh bìa')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(MediaViewer), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
   );
 
   testWidgets(

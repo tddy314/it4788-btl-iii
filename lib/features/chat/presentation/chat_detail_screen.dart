@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+
+import 'dart:async';
+
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/app_scope.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_states.dart';
 import '../controllers/chat_detail_controller.dart';
 import '../data/chat_repository.dart';
+import '../data/chat_attachment_store.dart';
+import '../models/chat_message.dart';
 import 'widgets/chat_input_bar.dart';
 import 'widgets/chat_message_bubble.dart';
 
@@ -27,8 +33,11 @@ class ChatDetailScreen extends StatefulWidget {
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
 }
 
-class _ChatDetailScreenState extends State<ChatDetailScreen> {
+class _ChatDetailScreenState extends State<ChatDetailScreen>
+    with WidgetsBindingObserver {
   ChatDetailController? _controller;
+  ChatRepository? _repository;
+  bool _invalidArguments = false;
   final _scrollController = ScrollController();
   bool _initialized = false;
 
@@ -59,6 +68,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         _isBlocked = widget.isBlocked;
       }
 
+      if (!RegExp(r'^[1-9][0-9]*$').hasMatch(_convId)) {
+        _invalidArguments = true;
+        return;
+      }
+      WidgetsBinding.instance.addObserver(this);
       final deps = AppScope.of(context);
       final userId = deps.session.tokens?.userId ?? 'anonymous';
 
@@ -66,7 +80,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         api: deps.api,
         cache: deps.cache,
         mediaUploadService: deps.mediaUpload,
+        privateStore: deps.drafts,
+        wsUrl: Uri.parse(deps.config.normalizedBaseUrl)
+            .resolve('ws')
+            .replace(scheme: 'wss')
+            .toString(),
       );
+      _repository = repository;
 
       _controller = ChatDetailController(
         repository: repository,
@@ -76,6 +96,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         conversationId: _convId,
         partnerName: _pName,
         partnerAvatarUrl: _pAvatar,
+        isCurrent: () => repository.isActive,
       )..initialize();
 
       _scrollController.addListener(_onScroll);
@@ -91,12 +112,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     _controller?.dispose();
+    _repository?.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_controller?.reconnect());
+    if (state == AppLifecycleState.paused) _controller?.pause();
+  }
+
   Future<void> _pickAndSendImage() async {
+    if (_controller?.canCompose != true) return;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -131,7 +161,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         imageQuality: 85,
       );
       if (picked != null && mounted) {
-        _controller?.sendImageMessage(picked.path);
+        final path = await ChatAttachmentStore.keep(
+          picked.path,
+          _controller!.userId,
+          preserve: _controller!.messages
+              .expand((m) => m.mediaUrls)
+              .where((path) => !path.startsWith('https://'))
+              .toSet(),
+        );
+        if (mounted) await _controller?.sendImageMessage(path);
+      }
+    } on AppFailure catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
       if (mounted) {
@@ -146,6 +189,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_invalidArguments) {
+      return const Scaffold(
+        body: SafeArea(
+          child: AppErrorState(message: 'Hội thoại không hợp lệ.'),
+        ),
+      );
+    }
     final controller = _controller;
     if (controller == null) {
       return const Scaffold(
@@ -185,13 +235,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             color: theme.colorScheme.primary,
                             fontStyle: FontStyle.italic,
                           ),
-                        )
-                      else
-                        Text(
-                          'Trực tuyến',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.green,
-                          ),
                         ),
                     ],
                   ),
@@ -201,6 +244,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
           body: Column(
             children: [
+              if (controller.errorMessage != null &&
+                  controller.messages.isNotEmpty)
+                MaterialBanner(
+                  content: Text(controller.errorMessage!),
+                  actions: [
+                    TextButton(
+                      onPressed: controller.isLoading
+                          ? null
+                          : controller.reconnect,
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                ),
+              if (controller.isDeleting) const LinearProgressIndicator(),
               // Khu vực danh sách tin nhắn
               Expanded(child: _buildMessagesArea(context, controller)),
 
@@ -216,11 +273,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     children: [
                       AppAvatar(imageUrl: _pAvatar, name: _pName, size: 20),
                       const SizedBox(width: 8),
-                      Text(
-                        '$_pName đang soạn tin nhắn…',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                          fontStyle: FontStyle.italic,
+                      Expanded(
+                        child: Text(
+                          '$_pName đang soạn tin nhắn…',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ),
                     ],
@@ -228,23 +289,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
 
               // Nếu đang bị chặn thì hiện banner cảnh báo, ngược lại hiện thanh chat input
-              if (_isBlocked)
+              if (_isBlocked || controller.accessDenied)
                 Container(
                   width: double.infinity,
-                  color: Colors.amber.shade100,
+                  color: theme.colorScheme.errorContainer,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 10,
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.block, color: Colors.red, size: 20),
+                      Icon(
+                        Icons.block,
+                        color: theme.colorScheme.onErrorContainer,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Bạn không thể gửi tin nhắn cho người này do đã bị chặn.',
+                          _isBlocked
+                              ? 'Bạn không thể gửi tin nhắn cho người này do đã bị chặn.'
+                              : controller.errorMessage ?? 'Bạn không có quyền gửi tin nhắn trong cuộc trò chuyện này.',
                           style: TextStyle(
-                            color: Colors.red.shade900,
+                            color: theme.colorScheme.onErrorContainer,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
@@ -255,11 +322,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 )
               else
                 ChatInputBar(
+                  enabled: controller.canCompose,
                   initialText: controller.draftText,
                   onTextChanged: controller.onTextChanged,
                   onSendText: controller.sendTextMessage,
                   onPickImage: _pickAndSendImage,
-                  onSendGif: controller.sendGifMessage,
                 ),
             ],
           ),
@@ -297,25 +364,93 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       itemCount: controller.messages.length + (controller.hasNext ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == controller.messages.length) {
-          return const Padding(
+          return Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              child: TextButton(
+                onPressed: controller.isLoadingEarlier
+                    ? null
+                    : controller.loadEarlierMessages,
+                child: Text(
+                  controller.isLoadingEarlier ? 'Đang tải…' : 'Tải tin nhắn cũ',
+                ),
               ),
             ),
           );
         }
 
         final message = controller.messages[index];
-        return ChatMessageBubble(
-          message: message,
-          currentUserId: controller.userId,
-          onRetry: () => controller.retryFailedMessage(message),
+        return GestureDetector(
+          onLongPress: message.messageId.isEmpty || controller.isDeleting
+              ? null
+              : () => _showMessageActions(message),
+          child: ChatMessageBubble(
+            message: message,
+            currentUserId: controller.userId,
+            onRetry: () => controller.retryFailedMessage(message),
+          ),
         );
       },
+    );
+  }
+
+  Future<void> _showMessageActions(ChatMessage message) async {
+    final controller = _controller;
+    if (controller == null || controller.isDeleting) return;
+    final scope = await showModalBottomSheet<MessageDeleteScope>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Xóa ở phía tôi'),
+              onTap: () => Navigator.pop(context, MessageDeleteScope.me),
+            ),
+            if (message.isMine(controller.userId))
+              ListTile(
+                leading: const Icon(Icons.undo),
+                title: const Text('Thu hồi với mọi người'),
+                onTap: () =>
+                    Navigator.pop(context, MessageDeleteScope.everyone),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || scope == null) return;
+    final everyone = scope == MessageDeleteScope.everyone;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(everyone ? 'Thu hồi tin nhắn?' : 'Xóa tin nhắn?'),
+        content: Text(
+          everyone
+              ? 'Tin nhắn sẽ được thu hồi với mọi người trong cuộc trò chuyện.'
+              : 'Tin nhắn chỉ bị xóa ở phía bạn. Người còn lại vẫn có thể xem.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(everyone ? 'Thu hồi' : 'Xóa'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    final success = await controller.deleteMessage(message, scope);
+    if (!mounted || !success) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          everyone ? 'Đã thu hồi tin nhắn.' : 'Đã xóa tin nhắn ở phía bạn.',
+        ),
+      ),
     );
   }
 }

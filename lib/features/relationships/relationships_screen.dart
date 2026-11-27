@@ -99,6 +99,7 @@ class _RelationshipsScreenState extends State<RelationshipsScreen> {
     try {
       final done = await widget.changes.mutate(
         () => _repository.change(action, person.id),
+        unblockedUserId: action == SocialAction.unblock ? person.id : null,
       );
       if (mounted && _repository.lease.active && done) {
         setState(() => _message = 'Đã đối soát và cập nhật quan hệ.');
